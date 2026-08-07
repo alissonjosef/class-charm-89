@@ -16,6 +16,13 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        ink: "bg-ink text-ink-foreground shadow-soft hover:bg-ink/90",
+        gold: "bg-gold text-gold-foreground shadow-soft hover:bg-gold/90",
+        success: "bg-success text-success-foreground shadow-sm hover:bg-success/90",
+        soft: "bg-secondary/70 text-secondary-foreground border border-border hover:bg-accent hover:border-primary/30",
+        softDanger:
+          "bg-destructive/8 text-destructive border border-destructive/25 hover:bg-destructive/15",
+        softSuccess: "bg-success/10 text-success border border-success/25 hover:bg-success/18",
       },
       size: {
         default: "h-9 px-4 py-2",
