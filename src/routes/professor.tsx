@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AttendanceTab } from "@/components/teacher/AttendanceTab";
 import { HistoryTab } from "@/components/teacher/HistoryTab";
 import { QuizzesTab } from "@/components/teacher/QuizzesTab";
+import { ALL_CLASSES } from "@/components/teacher/ClassBar";
 
 export const Route = createFileRoute("/professor")({
   head: () => ({
@@ -31,6 +32,16 @@ export const Route = createFileRoute("/professor")({
 function TeacherPage() {
   const { ready } = useRoleGuard("teacher");
   const [fire, setFire] = useState(0);
+  const [classId, setClassId] = useState<string>(() =>
+    typeof window === "undefined"
+      ? ALL_CLASSES
+      : (window.localStorage.getItem("classe-viva:class") ?? ALL_CLASSES),
+  );
+
+  function selectClass(value: string) {
+    setClassId(value);
+    window.localStorage.setItem("classe-viva:class", value);
+  }
 
   if (!ready) return <FullPageLoader />;
 
@@ -47,10 +58,14 @@ function TeacherPage() {
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
         </TabsList>
         <TabsContent value="chamada">
-          <AttendanceTab onCelebrate={() => setFire((v) => v + 1)} />
+          <AttendanceTab
+            classId={classId}
+            onClassChange={selectClass}
+            onCelebrate={() => setFire((v) => v + 1)}
+          />
         </TabsContent>
         <TabsContent value="extrato">
-          <HistoryTab />
+          <HistoryTab classId={classId} onClassChange={selectClass} />
         </TabsContent>
         <TabsContent value="quizzes">
           <QuizzesTab />

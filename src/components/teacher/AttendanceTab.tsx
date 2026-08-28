@@ -1,45 +1,37 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useClassMembers } from "@/hooks/useClasses";
+import { useStudents, type Student } from "@/hooks/useStudents";
+import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import { GROUP_LABELS, RULES, levelFor, type Rule } from "@/lib/points";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PointsBurst } from "@/components/Feedback";
 import { EmptyState } from "@/components/States";
 
-export type Student = { id: string; name: string; email: string; total_points: number };
-
-export function useStudents() {
-  return useQuery({
-    queryKey: ["students"],
-    queryFn: async (): Promise<Student[]> => {
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "student");
-      if (rolesError) throw rolesError;
-      const ids = (roles ?? []).map((r) => r.user_id);
-      if (!ids.length) return [];
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, name, email, total_points")
-        .in("id", ids)
-        .order("total_points", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Student[];
-    },
-  });
-}
-
 const GROUPS = ["presenca", "material", "atividades", "destaque"] as const;
 
-export function AttendanceTab({ onCelebrate }: { onCelebrate: () => void }) {
+export function AttendanceTab({
+  classId,
+  onClassChange,
+  onCelebrate,
+}: {
+  classId: string;
+  onClassChange: (value: string) => void;
+  onCelebrate: () => void;
+}) {
   const { session } = useAuth();
   const queryClient = useQueryClient();
-  const { data: students, isLoading } = useStudents();
+  const { data: allStudents, isLoading } = useStudents();
+  const { data: members } = useClassMembers(classId === ALL_CLASSES ? null : classId);
+  const students =
+    classId === ALL_CLASSES
+      ? allStudents
+      : allStudents?.filter((student) => (members ?? []).includes(student.id));
   const [open, setOpen] = useState<string | null>(null);
   const [term, setTerm] = useState("");
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
@@ -52,6 +44,7 @@ export function AttendanceTab({ onCelebrate }: { onCelebrate: () => void }) {
         points: rule.points,
         note: rule.label,
         registered_by: session!.user.id,
+        class_id: classId === ALL_CLASSES ? null : classId,
       });
       if (error) throw error;
       return { student, rule };
@@ -82,15 +75,25 @@ export function AttendanceTab({ onCelebrate }: { onCelebrate: () => void }) {
 
   if (!students?.length) {
     return (
-      <EmptyState
-        title="Nenhum aluno cadastrado ainda"
-        text="Peça para os alunos criarem a conta escolhendo o perfil “Aluno”. Eles aparecerão aqui automaticamente."
-      />
+      <>
+        <ClassBar classId={classId} onChange={onClassChange} manageable />
+        <EmptyState
+          title={
+            classId === ALL_CLASSES ? "Nenhum aluno cadastrado ainda" : "Nenhum aluno nesta sala"
+          }
+          text={
+            classId === ALL_CLASSES
+              ? "Peça para os alunos criarem a conta escolhendo o perfil “Aluno”. Eles aparecerão aqui automaticamente."
+              : "Use “Alunos da sala” para escolher quem faz parte desta turma."
+          }
+        />
+      </>
     );
   }
 
   return (
     <div className="space-y-3">
+      <ClassBar classId={classId} onChange={onClassChange} manageable />
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
