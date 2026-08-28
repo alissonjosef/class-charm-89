@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { GraduationCap, Loader2, Sparkles, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -103,9 +103,9 @@ function AuthPage() {
           aria-hidden
           className="absolute -right-24 -top-24 size-96 animate-shine rounded-full bg-gold/25 blur-3xl"
         />
-        <Link to="/" className="relative flex items-center gap-2 font-display text-lg font-semibold">
+        <span className="relative flex items-center gap-2 font-display text-lg font-semibold">
           <Sparkles className="size-5 text-gold" /> Classe Viva
-        </Link>
+        </span>
         <div className="relative max-w-sm">
           <h2 className="text-balance-tight text-3xl font-semibold leading-tight">
             Presença que vale ponto. Aula que vira conquista.

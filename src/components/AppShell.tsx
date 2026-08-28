@@ -19,7 +19,10 @@ export function AppShell({
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="mx-auto grid max-w-5xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
-          <Link to="/" className="flex min-w-0 items-center gap-2.5">
+          <Link
+            to={role === "teacher" ? "/professor" : "/aluno"}
+            className="flex min-w-0 items-center gap-2.5"
+          >
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-ink text-ink-foreground">
               <Sparkles className="size-4" />
             </span>
