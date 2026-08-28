@@ -22,18 +22,23 @@ type Row = {
 export function HistoryTab({
   classId,
   onClassChange,
+  term,
+  onTermChange,
 }: {
   classId: string;
   onClassChange: (value: string) => void;
+  term: string;
+  onTermChange: (value: string) => void;
 }) {
   const queryClient = useQueryClient();
   const { data: students } = useStudents();
   const { data, isLoading } = useQuery({
-    queryKey: ["class-history", classId],
+    queryKey: ["class-history", classId, term],
     queryFn: async (): Promise<Row[]> => {
       let query = supabase
         .from("points_history")
         .select("id, student_id, type, points, note, created_at, class_id")
+        .eq("term", term)
         .order("created_at", { ascending: false })
         .limit(150);
       if (classId !== ALL_CLASSES) query = query.eq("class_id", classId);
@@ -52,6 +57,7 @@ export function HistoryTab({
       toast.success("Lançamento estornado");
       queryClient.invalidateQueries({ queryKey: ["class-history"] });
       queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["term-points"] });
     },
     onError: () => toast.error("Não foi possível estornar"),
   });
@@ -69,13 +75,18 @@ export function HistoryTab({
   if (!data?.length) {
     return (
       <>
-        <ClassBar classId={classId} onChange={onClassChange} />
+        <ClassBar
+          classId={classId}
+          onChange={onClassChange}
+          term={term}
+          onTermChange={onTermChange}
+        />
         <EmptyState
           title="Sem lançamentos por aqui"
           text={
             classId === ALL_CLASSES
-              ? "Assim que você aplicar pontos na chamada, o extrato da turma aparece nesta lista."
-              : "Esta sala ainda não tem lançamentos. Faça a chamada com a sala selecionada."
+              ? "Nenhum lançamento neste trimestre. Ao virar o trimestre a contagem começa do zero."
+              : "Esta sala ainda não tem lançamentos neste trimestre."
           }
         />
       </>
@@ -84,7 +95,12 @@ export function HistoryTab({
 
   return (
     <>
-      <ClassBar classId={classId} onChange={onClassChange} />
+      <ClassBar
+        classId={classId}
+        onChange={onClassChange}
+        term={term}
+        onTermChange={onTermChange}
+      />
       <ul className="surface divide-y divide-border overflow-hidden">
         {data.map((row) => (
           <li

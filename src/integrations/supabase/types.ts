@@ -40,6 +40,35 @@ export type Database = {
           },
         ]
       }
+      class_teachers: {
+        Row: {
+          added_by: string | null
+          class_id: string
+          created_at: string
+          teacher_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          class_id: string
+          created_at?: string
+          teacher_id: string
+        }
+        Update: {
+          added_by?: string | null
+          class_id?: string
+          created_at?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_teachers_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       classes: {
         Row: {
           created_at: string
@@ -64,6 +93,7 @@ export type Database = {
       points_history: {
         Row: {
           class_id: string | null
+          term: string
           created_at: string
           id: string
           note: string | null
@@ -74,6 +104,7 @@ export type Database = {
         }
         Insert: {
           class_id?: string | null
+          term?: string
           created_at?: string
           id?: string
           note?: string | null
@@ -84,6 +115,7 @@ export type Database = {
         }
         Update: {
           class_id?: string | null
+          term?: string
           created_at?: string
           id?: string
           note?: string | null
@@ -128,36 +160,56 @@ export type Database = {
       }
       quizzes: {
         Row: {
+          class_id: string | null
+          closed_at: string | null
           created_at: string
           created_by: string | null
           description: string | null
           due_date: string | null
           id: string
+          open_at: string | null
           published: boolean
           questions: Json
+          term: string
           title: string
         }
         Insert: {
+          class_id?: string | null
+          closed_at?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
+          open_at?: string | null
           published?: boolean
           questions?: Json
+          term?: string
           title: string
         }
         Update: {
+          class_id?: string | null
+          closed_at?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           due_date?: string | null
           id?: string
+          open_at?: string | null
           published?: boolean
           questions?: Json
+          term?: string
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       submissions: {
         Row: {
@@ -223,6 +275,36 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      can_manage_class: {
+        Args: {
+          _class_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      current_term: {
+        Args: Record<string, never>
+        Returns: string
+      }
+      quiz_is_open: {
+        Args: {
+          _quiz_id: string
+        }
+        Returns: boolean
+      }
+      quiz_visible_to: {
+        Args: {
+          _quiz_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      term_of: {
+        Args: {
+          _at: string
+        }
+        Returns: string
       }
       is_class_member: {
         Args: {

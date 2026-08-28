@@ -1,10 +1,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Loader2, Plus, Trash2, Users } from "lucide-react";
+import { CalendarClock, Loader2, Lock, Plus, Send, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { parseQuiz, type Quiz, type QuizQuestion } from "@/lib/types";
+import {
+  QUIZ_COLUMNS,
+  parseQuiz,
+  quizStatus,
+  type Quiz,
+  type QuizQuestion,
+  type QuizStatus,
+} from "@/lib/types";
+import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,25 +30,59 @@ function emptyQuestion(): QuizQuestion {
   };
 }
 
-export function useQuizzes() {
+export function useQuizzes(term: string, classId: string | null) {
   return useQuery({
-    queryKey: ["quizzes"],
+    queryKey: ["quizzes", term, classId],
     queryFn: async (): Promise<Quiz[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("quizzes")
-        .select("id, title, description, due_date, questions, published, created_at")
+        .select(QUIZ_COLUMNS)
+        .eq("term", term)
         .order("created_at", { ascending: false });
+      if (classId) query = query.eq("class_id", classId);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []).map(parseQuiz);
     },
   });
 }
 
-export function QuizzesTab() {
+const STATUS_STYLE: Record<QuizStatus, string> = {
+  rascunho: "bg-secondary text-secondary-foreground",
+  agendado: "bg-accent text-accent-foreground",
+  aberto: "bg-success/12 text-success",
+  encerrado: "bg-destructive/10 text-destructive",
+};
+
+export function QuizzesTab({
+  classId,
+  onClassChange,
+  term,
+  onTermChange,
+}: {
+  classId: string;
+  onClassChange: (value: string) => void;
+  term: string;
+  onTermChange: (value: string) => void;
+}) {
   const [creating, setCreating] = useState(false);
-  const { data: quizzes, isLoading } = useQuizzes();
+  const { data: quizzes, isLoading } = useQuizzes(term, classId === ALL_CLASSES ? null : classId);
   const [openQuiz, setOpenQuiz] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const setRelease = useMutation({
+    mutationFn: async ({ quiz, action }: { quiz: Quiz; action: "open" | "close" | "reopen" }) => {
+      const patch =
+        action === "close"
+          ? { closed_at: new Date().toISOString() }
+          : { published: true, open_at: new Date().toISOString(), closed_at: null };
+      const { error } = await supabase.from("quizzes").update(patch).eq("id", quiz.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["quizzes"] }),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar"),
+  });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
@@ -53,10 +95,22 @@ export function QuizzesTab() {
     },
   });
 
-  if (creating) return <QuizForm onDone={() => setCreating(false)} />;
+  if (creating)
+    return (
+      <QuizForm
+        classId={classId === ALL_CLASSES ? null : classId}
+        onDone={() => setCreating(false)}
+      />
+    );
 
   return (
     <div className="space-y-4">
+      <ClassBar
+        classId={classId}
+        onChange={onClassChange}
+        term={term}
+        onTermChange={onTermChange}
+      />
       <Button variant="ink" className="w-full sm:w-auto" onClick={() => setCreating(true)}>
         <Plus className="size-4" /> Nova pergunta / quiz
       </Button>
@@ -68,7 +122,7 @@ export function QuizzesTab() {
       ) : !quizzes?.length ? (
         <EmptyState
           title="Nenhum quiz criado"
-          text="Crie um formulário com perguntas de múltipla escolha, prazo e pontuação para liberar à turma."
+          text="Crie o quiz com calma: ele fica como rascunho até você liberar para a sala."
         />
       ) : (
         <div className="space-y-3">
@@ -78,10 +132,26 @@ export function QuizzesTab() {
                 <div className="min-w-0">
                   <h3 className="truncate font-display text-base font-semibold">{quiz.title}</h3>
                   <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span
+                      className={`rounded-full px-2 py-0.5 font-semibold ${STATUS_STYLE[quizStatus(quiz)]}`}
+                    >
+                      {quizStatus(quiz)}
+                    </span>
                     <span>{quiz.questions.length} pergunta(s)</span>
                     <span>
                       {quiz.questions.reduce((sum, q) => sum + q.points, 0)} pontos possíveis
                     </span>
+                    {quiz.open_at ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Send className="size-3" />
+                        {new Date(quiz.open_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    ) : null}
                     {quiz.due_date ? (
                       <span className="inline-flex items-center gap-1">
                         <CalendarClock className="size-3" />
@@ -90,7 +160,32 @@ export function QuizzesTab() {
                     ) : null}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1">
+                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                  {quizStatus(quiz) === "aberto" ? (
+                    <Button
+                      variant="softDanger"
+                      size="sm"
+                      disabled={setRelease.isPending}
+                      onClick={() => setRelease.mutate({ quiz, action: "close" })}
+                    >
+                      <Lock className="size-4" /> Encerrar
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="softSuccess"
+                      size="sm"
+                      disabled={setRelease.isPending}
+                      onClick={() =>
+                        setRelease.mutate({
+                          quiz,
+                          action: quizStatus(quiz) === "encerrado" ? "reopen" : "open",
+                        })
+                      }
+                    >
+                      <Send className="size-4" />
+                      {quizStatus(quiz) === "encerrado" ? "Reabrir" : "Liberar agora"}
+                    </Button>
+                  )}
                   <Button
                     variant="soft"
                     size="sm"
@@ -164,9 +259,7 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
                       <li key={question.id} className="text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">{i + 1}.</span>{" "}
                         {question.options[chosen ?? -1] ?? "Sem resposta"}{" "}
-                        <b className={ok ? "text-success" : "text-destructive"}>
-                          {ok ? "✓" : "✕"}
-                        </b>
+                        <b className={ok ? "text-success" : "text-destructive"}>{ok ? "✓" : "✕"}</b>
                       </li>
                     );
                   })}
@@ -180,12 +273,13 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
   );
 }
 
-function QuizForm({ onDone }: { onDone: () => void }) {
+function QuizForm({ classId, onDone }: { classId: string | null; onDone: () => void }) {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [openAt, setOpenAt] = useState("");
   const [questions, setQuestions] = useState<QuizQuestion[]>([emptyQuestion()]);
 
   function update(id: string, patch: Partial<QuizQuestion>) {
@@ -193,8 +287,9 @@ function QuizForm({ onDone }: { onDone: () => void }) {
   }
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (mode: "draft" | "release") => {
       if (!title.trim()) throw new Error("Informe o título do quiz");
+      if (!classId) throw new Error("Selecione a sala do quiz antes de salvar");
       const clean = questions.map((q) => ({
         ...q,
         statement: q.statement.trim(),
@@ -206,18 +301,28 @@ function QuizForm({ onDone }: { onDone: () => void }) {
       if (clean.some((q) => q.correctOption >= q.options.length))
         throw new Error("Marque a alternativa correta de cada pergunta");
 
+      const scheduled = openAt ? new Date(openAt).toISOString() : null;
       const { error } = await supabase.from("quizzes").insert({
         title: title.trim(),
         description: description.trim() || null,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
         questions: clean,
-        published: true,
+        class_id: classId,
+        open_at: mode === "release" ? (scheduled ?? new Date().toISOString()) : scheduled,
+        published: mode === "release" || Boolean(scheduled),
         created_by: session!.user.id,
       });
       if (error) throw error;
+      return mode;
     },
-    onSuccess: () => {
-      toast.success("Quiz publicado para a turma!");
+    onSuccess: (mode) => {
+      toast.success(
+        mode === "draft"
+          ? "Rascunho salvo. Libere quando quiser."
+          : openAt
+            ? "Quiz agendado para a sala!"
+            : "Quiz liberado para a sala!",
+      );
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
       onDone();
     },
@@ -247,14 +352,28 @@ function QuizForm({ onDone }: { onDone: () => void }) {
             placeholder="Instruções para a turma"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="due">Prazo</Label>
-          <Input
-            id="due"
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="open">Liberar em (opcional)</Label>
+            <Input
+              id="open"
+              type="datetime-local"
+              value={openAt}
+              onChange={(e) => setOpenAt(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Deixe vazio para liberar na hora ou guardar como rascunho.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="due">Prazo</Label>
+            <Input
+              id="due"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
@@ -300,7 +419,9 @@ function QuizForm({ onDone }: { onDone: () => void }) {
                   maxLength={200}
                   onChange={(e) =>
                     update(question.id, {
-                      options: question.options.map((o, i) => (i === optionIndex ? e.target.value : o)),
+                      options: question.options.map((o, i) =>
+                        i === optionIndex ? e.target.value : o,
+                      ),
                     })
                   }
                   placeholder={`Alternativa ${String.fromCharCode(65 + optionIndex)}`}
@@ -335,8 +456,12 @@ function QuizForm({ onDone }: { onDone: () => void }) {
         <Button variant="soft" onClick={() => setQuestions((prev) => [...prev, emptyQuestion()])}>
           <Plus className="size-4" /> Adicionar pergunta
         </Button>
-        <Button variant="ink" disabled={save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? <Loader2 className="size-4 animate-spin" /> : null} Publicar quiz
+        <Button variant="soft" disabled={save.isPending} onClick={() => save.mutate("draft")}>
+          Salvar rascunho
+        </Button>
+        <Button variant="ink" disabled={save.isPending} onClick={() => save.mutate("release")}>
+          {save.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+          {openAt ? "Agendar liberação" : "Liberar agora"}
         </Button>
         <Button variant="ghost" onClick={onDone}>
           Cancelar

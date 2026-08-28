@@ -9,11 +9,13 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState, FullPageLoader } from "@/components/States";
 import { Confetti } from "@/components/Feedback";
 import { QuizRunner } from "@/components/student/QuizRunner";
+import { QuizReview } from "@/components/student/QuizReview";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { GROUP_LABELS, RULES, levelFor, ruleLabel } from "@/lib/points";
-import { parseQuiz, type PointEntry, type Quiz } from "@/lib/types";
+import { QUIZ_COLUMNS, parseQuiz, quizStatus, type PointEntry, type Quiz } from "@/lib/types";
+import { currentTerm, termLabel } from "@/lib/terms";
 
 export const Route = createFileRoute("/aluno")({
   head: () => ({
@@ -36,15 +38,30 @@ export const Route = createFileRoute("/aluno")({
 
 function StudentPage() {
   const { ready } = useRoleGuard("student");
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [fire, setFire] = useState(0);
+  const term = currentTerm();
+
+  const termPoints = useQuery({
+    queryKey: ["my-term-points", session?.user.id, term],
+    enabled: Boolean(session?.user.id),
+    queryFn: async (): Promise<number> => {
+      const { data, error } = await supabase
+        .from("points_history")
+        .select("points")
+        .eq("student_id", session!.user.id)
+        .eq("term", term);
+      if (error) throw error;
+      return (data ?? []).reduce((sum, row) => sum + row.points, 0);
+    },
+  });
 
   if (!ready || !profile) return <FullPageLoader />;
 
   return (
     <AppShell title={`Olá, ${profile.name.split(" ")[0]}!`} subtitle="Seu progresso na turma.">
       <Confetti fire={fire} />
-      <ScoreHero points={profile.total_points} />
+      <ScoreHero points={termPoints.data ?? 0} term={term} />
       <Tabs defaultValue="extrato" className="mt-6">
         <TabsList className="mb-5 grid w-full grid-cols-3">
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
@@ -65,7 +82,7 @@ function StudentPage() {
   );
 }
 
-function ScoreHero({ points }: { points: number }) {
+function ScoreHero({ points, term }: { points: number; term: string }) {
   const { current, next, progress } = levelFor(points);
   return (
     <section className="relative animate-pop-in overflow-hidden rounded-2xl bg-ink p-6 text-ink-foreground shadow-lift">
@@ -74,7 +91,9 @@ function ScoreHero({ points }: { points: number }) {
         className="absolute -right-16 -top-16 size-56 animate-shine rounded-full bg-gold/25 blur-3xl"
       />
       <div className="relative">
-        <p className="text-xs uppercase tracking-widest text-ink-foreground/60">Saldo total</p>
+        <p className="text-xs uppercase tracking-widest text-ink-foreground/60">
+          {termLabel(term)}
+        </p>
         <div className="mt-1 flex items-end gap-3">
           <span className="font-display text-5xl font-bold leading-none">{points}</span>
           <span className="pb-1 text-sm text-ink-foreground/70">pontos</span>
@@ -98,12 +117,13 @@ function ScoreHero({ points }: { points: number }) {
 function MyHistory() {
   const { session } = useAuth();
   const { data, isLoading } = useQuery({
-    queryKey: ["my-history", session?.user.id],
+    queryKey: ["my-history", session?.user.id, currentTerm()],
     queryFn: async (): Promise<PointEntry[]> => {
       const { data, error } = await supabase
         .from("points_history")
         .select("id, student_id, type, points, note, created_at")
         .eq("student_id", session!.user.id)
+        .eq("term", currentTerm())
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -161,14 +181,16 @@ function MyHistory() {
 function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
   const { session } = useAuth();
   const [active, setActive] = useState<Quiz | null>(null);
+  const [reviewing, setReviewing] = useState<Quiz | null>(null);
 
   const quizzes = useQuery({
-    queryKey: ["published-quizzes"],
+    queryKey: ["published-quizzes", currentTerm()],
     queryFn: async (): Promise<Quiz[]> => {
       const { data, error } = await supabase
         .from("quizzes")
-        .select("id, title, description, due_date, questions, published, created_at")
+        .select(QUIZ_COLUMNS)
         .eq("published", true)
+        .eq("term", currentTerm())
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map(parseQuiz);
@@ -180,17 +202,33 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("submissions")
-        .select("quiz_id, score_obtained")
+        .select("quiz_id, score_obtained, answers")
         .eq("student_id", session!.user.id);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((row) => ({
+        quiz_id: row.quiz_id,
+        score_obtained: row.score_obtained,
+        answers: (row.answers as number[]) ?? [],
+      }));
     },
   });
 
   if (active) {
-    return (
-      <QuizRunner quiz={active} onClose={() => setActive(null)} onCelebrate={onCelebrate} />
-    );
+    return <QuizRunner quiz={active} onClose={() => setActive(null)} onCelebrate={onCelebrate} />;
+  }
+
+  if (reviewing) {
+    const submission = done.data?.find((s) => s.quiz_id === reviewing.id);
+    if (submission) {
+      return (
+        <QuizReview
+          quiz={reviewing}
+          answers={submission.answers}
+          score={submission.score_obtained}
+          onClose={() => setReviewing(null)}
+        />
+      );
+    }
   }
 
   if (quizzes.isLoading) {
@@ -215,6 +253,8 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
       {quizzes.data.map((quiz) => {
         const submission = done.data?.find((s) => s.quiz_id === quiz.id);
         const total = quiz.questions.reduce((sum, q) => sum + q.points, 0);
+        const status = quizStatus(quiz);
+        if (status !== "aberto" && !submission) return null;
         return (
           <article key={quiz.id} className="surface animate-pop-in p-4">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -232,11 +272,21 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
                 </p>
               </div>
               {submission ? (
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success/12 px-3 py-1 text-xs font-semibold text-success">
-                  <CheckCircle2 className="size-3.5" /> {submission.score_obtained} pts
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/12 px-3 py-1 text-xs font-semibold text-success">
+                    <CheckCircle2 className="size-3.5" /> {submission.score_obtained} pts
+                  </span>
+                  <Button variant="soft" size="sm" onClick={() => setReviewing(quiz)}>
+                    Ver respostas
+                  </Button>
+                </div>
               ) : (
-                <Button variant="ink" size="sm" className="shrink-0" onClick={() => setActive(quiz)}>
+                <Button
+                  variant="ink"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setActive(quiz)}
+                >
                   Responder
                 </Button>
               )}

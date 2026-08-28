@@ -47,6 +47,7 @@ export function QuizRunner({
       await refresh();
       queryClient.invalidateQueries({ queryKey: ["my-history"] });
       queryClient.invalidateQueries({ queryKey: ["my-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["my-term-points"] });
     },
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : "Não foi possível enviar"),
@@ -96,9 +97,7 @@ export function QuizRunner({
               <button
                 key={index}
                 type="button"
-                onClick={() =>
-                  setAnswers((prev) => prev.map((a, i) => (i === step ? index : a)))
-                }
+                onClick={() => setAnswers((prev) => prev.map((a, i) => (i === step ? index : a)))}
                 className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition-all active:scale-[0.99] ${
                   selected
                     ? "border-primary bg-accent shadow-soft"
@@ -125,11 +124,7 @@ export function QuizRunner({
             {step === 0 ? "Cancelar" : "Voltar"}
           </Button>
           {step < quiz.questions.length - 1 ? (
-            <Button
-              variant="ink"
-              disabled={answers[step] === -1}
-              onClick={() => setStep(step + 1)}
-            >
+            <Button variant="ink" disabled={answers[step] === -1} onClick={() => setStep(step + 1)}>
               Próxima <ArrowRight className="size-4" />
             </Button>
           ) : (
