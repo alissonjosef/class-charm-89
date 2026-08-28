@@ -50,6 +50,64 @@ export function useCreateClass() {
   });
 }
 
+export function useRenameClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("classes").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["classes"] }),
+  });
+}
+
+export function useClassTeachers(classId: string | null) {
+  return useQuery({
+    queryKey: ["class-teachers", classId],
+    enabled: Boolean(classId),
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase
+        .from("class_teachers")
+        .select("teacher_id")
+        .eq("class_id", classId!);
+      if (error) throw error;
+      return (data ?? []).map((row) => row.teacher_id);
+    },
+  });
+}
+
+/** Promove o aluno a professor e o autoriza nesta sala. */
+export function useAuthorizeTeacher(classId: string | null) {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, authorized }: { userId: string; authorized: boolean }) => {
+      if (authorized) {
+        const { error } = await supabase
+          .from("class_teachers")
+          .delete()
+          .eq("class_id", classId!)
+          .eq("teacher_id", userId);
+        if (error) throw error;
+        return;
+      }
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .insert({ user_id: userId, role: "teacher" });
+      // 23505: já era professor
+      if (roleError && roleError.code !== "23505") throw roleError;
+      const { error } = await supabase
+        .from("class_teachers")
+        .insert({ class_id: classId!, teacher_id: userId, added_by: session!.user.id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["class-teachers", classId] });
+      queryClient.invalidateQueries({ queryKey: ["people"] });
+    },
+  });
+}
+
 export function useToggleClassMember(classId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({

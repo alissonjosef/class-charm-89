@@ -9,6 +9,7 @@ import { AttendanceTab } from "@/components/teacher/AttendanceTab";
 import { HistoryTab } from "@/components/teacher/HistoryTab";
 import { QuizzesTab } from "@/components/teacher/QuizzesTab";
 import { ALL_CLASSES } from "@/components/teacher/ClassBar";
+import { currentTerm } from "@/lib/terms";
 
 export const Route = createFileRoute("/professor")({
   head: () => ({
@@ -38,6 +39,8 @@ function TeacherPage() {
       : (window.localStorage.getItem("classe-viva:class") ?? ALL_CLASSES),
   );
 
+  const [term, setTerm] = useState(currentTerm);
+
   function selectClass(value: string) {
     setClassId(value);
     window.localStorage.setItem("classe-viva:class", value);
@@ -61,14 +64,26 @@ function TeacherPage() {
           <AttendanceTab
             classId={classId}
             onClassChange={selectClass}
+            term={term}
+            onTermChange={setTerm}
             onCelebrate={() => setFire((v) => v + 1)}
           />
         </TabsContent>
         <TabsContent value="extrato">
-          <HistoryTab classId={classId} onClassChange={selectClass} />
+          <HistoryTab
+            classId={classId}
+            onClassChange={selectClass}
+            term={term}
+            onTermChange={setTerm}
+          />
         </TabsContent>
         <TabsContent value="quizzes">
-          <QuizzesTab />
+          <QuizzesTab
+            classId={classId}
+            onClassChange={selectClass}
+            term={term}
+            onTermChange={setTerm}
+          />
         </TabsContent>
       </Tabs>
     </AppShell>

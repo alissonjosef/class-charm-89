@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClassMembers } from "@/hooks/useClasses";
+import { useTermPoints } from "@/hooks/useTermPoints";
 import { useStudents, type Student } from "@/hooks/useStudents";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import { GROUP_LABELS, RULES, levelFor, type Rule } from "@/lib/points";
@@ -18,22 +19,31 @@ const GROUPS = ["presenca", "material", "atividades", "destaque"] as const;
 export function AttendanceTab({
   classId,
   onClassChange,
+  term,
+  onTermChange,
   onCelebrate,
 }: {
   classId: string;
   onClassChange: (value: string) => void;
+  term: string;
+  onTermChange: (value: string) => void;
   onCelebrate: () => void;
 }) {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const { data: allStudents, isLoading } = useStudents();
   const { data: members } = useClassMembers(classId === ALL_CLASSES ? null : classId);
-  const students =
+  const { data: termPoints } = useTermPoints(term, classId === ALL_CLASSES ? null : classId);
+  const pointsOf = (studentId: string) => termPoints?.[studentId] ?? 0;
+  const students = (
     classId === ALL_CLASSES
       ? allStudents
-      : allStudents?.filter((student) => (members ?? []).includes(student.id));
+      : allStudents?.filter((student) => (members ?? []).includes(student.id))
+  )
+    ?.slice()
+    .sort((a, b) => pointsOf(b.id) - pointsOf(a.id));
   const [open, setOpen] = useState<string | null>(null);
-  const [term, setTerm] = useState("");
+  const [search, setSearch] = useState("");
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
 
   const apply = useMutation({
@@ -57,12 +67,13 @@ export function AttendanceTab({
       });
       queryClient.invalidateQueries({ queryKey: ["students"] });
       queryClient.invalidateQueries({ queryKey: ["class-history"] });
+      queryClient.invalidateQueries({ queryKey: ["term-points"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Erro ao lançar"),
   });
 
   const filtered = (students ?? []).filter((s) =>
-    s.name.toLowerCase().includes(term.trim().toLowerCase()),
+    s.name.toLowerCase().includes(search.trim().toLowerCase()),
   );
 
   if (isLoading) {
@@ -76,7 +87,13 @@ export function AttendanceTab({
   if (!students?.length) {
     return (
       <>
-        <ClassBar classId={classId} onChange={onClassChange} manageable />
+        <ClassBar
+          classId={classId}
+          onChange={onClassChange}
+          term={term}
+          onTermChange={onTermChange}
+          manageable
+        />
         <EmptyState
           title={
             classId === ALL_CLASSES ? "Nenhum aluno cadastrado ainda" : "Nenhum aluno nesta sala"
@@ -93,19 +110,25 @@ export function AttendanceTab({
 
   return (
     <div className="space-y-3">
-      <ClassBar classId={classId} onChange={onClassChange} manageable />
+      <ClassBar
+        classId={classId}
+        onChange={onClassChange}
+        term={term}
+        onTermChange={onTermChange}
+        manageable
+      />
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar aluno"
           className="pl-9"
         />
       </div>
 
       {filtered.map((student, index) => {
-        const { current } = levelFor(student.total_points);
+        const { current } = levelFor(pointsOf(student.id));
         const isOpen = open === student.id;
         return (
           <article key={student.id} className="surface overflow-hidden">
@@ -130,7 +153,7 @@ export function AttendanceTab({
                   <PointsBurst value={burst.value} id={burst.id} />
                 ) : null}
                 <span className="rounded-full bg-ink px-2.5 py-1 font-display text-sm font-semibold text-ink-foreground">
-                  {student.total_points}
+                  {pointsOf(student.id)}
                 </span>
                 <ChevronDown
                   className={`size-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
