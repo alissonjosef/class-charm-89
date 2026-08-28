@@ -14,8 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      class_members: {
+        Row: {
+          class_id: string
+          created_at: string
+          student_id: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          student_id: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_members_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classes: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          teacher_id?: string
+        }
+        Relationships: []
+      }
       points_history: {
         Row: {
+          class_id: string | null
           created_at: string
           id: string
           note: string | null
@@ -25,6 +73,7 @@ export type Database = {
           type: string
         }
         Insert: {
+          class_id?: string | null
           created_at?: string
           id?: string
           note?: string | null
@@ -34,6 +83,7 @@ export type Database = {
           type: string
         }
         Update: {
+          class_id?: string | null
           created_at?: string
           id?: string
           note?: string | null
@@ -42,7 +92,15 @@ export type Database = {
           student_id?: string
           type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "points_history_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -162,6 +220,20 @@ export type Database = {
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_class_member: {
+        Args: {
+          _class_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      owns_class: {
+        Args: {
+          _class_id: string
           _user_id: string
         }
         Returns: boolean
