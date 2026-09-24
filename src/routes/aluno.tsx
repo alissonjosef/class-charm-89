@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, Loader2, Lock, Trophy } from "lucide-react";
+import { BookOpen, CalendarClock, CheckCircle2, Loader2, Lock, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
@@ -15,8 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { levelFor, ruleLabel } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
+import { useLessons } from "@/hooks/useLessons";
 import { QUIZ_COLUMNS, parseQuiz, quizStatus, type PointEntry, type Quiz } from "@/lib/types";
-import { currentTerm, termLabel } from "@/lib/terms";
+import { currentTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
 
 export const Route = createFileRoute("/aluno")({
   head: () => ({
@@ -64,13 +65,17 @@ function StudentPage() {
       <Confetti fire={fire} />
       <ScoreHero points={termPoints.data ?? 0} term={term} />
       <Tabs defaultValue="extrato" className="mt-6">
-        <TabsList className="mb-5 grid w-full grid-cols-3">
+        <TabsList className="mb-5 grid w-full grid-cols-4">
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
+          <TabsTrigger value="aulas">Aulas</TabsTrigger>
           <TabsTrigger value="tarefas">Tarefas</TabsTrigger>
           <TabsTrigger value="regras">Regras</TabsTrigger>
         </TabsList>
         <TabsContent value="extrato">
           <MyHistory />
+        </TabsContent>
+        <TabsContent value="aulas">
+          <MyLessons />
         </TabsContent>
         <TabsContent value="tarefas">
           <MyTasks onCelebrate={() => setFire((v) => v + 1)} />
@@ -178,6 +183,58 @@ function MyHistory() {
           </span>
         </li>
       ))}
+    </ul>
+  );
+}
+
+function MyLessons() {
+  const { data: lessons, isLoading } = useLessons();
+  const today = todayInSaoPaulo();
+
+  if (isLoading) {
+    return (
+      <div className="grid place-items-center py-16">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!lessons?.length) {
+    return (
+      <EmptyState
+        title="Nenhuma aula publicada"
+        text="Quando o professor abrir uma aula, o tema e o conteúdo aparecem aqui para você estudar."
+      />
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {lessons.map((lesson) => {
+        const isToday = lesson.lesson_date === today;
+        return (
+          <li
+            key={lesson.id}
+            className={`surface space-y-2 p-4 ${isToday ? "ring-2 ring-primary/40" : ""}`}
+          >
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <BookOpen className="size-3.5" />
+              <span>{new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")}</span>
+              {isToday && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  Aula de hoje
+                </span>
+              )}
+            </div>
+            <p className="font-display text-base font-semibold">{lesson.theme}</p>
+            {lesson.description && (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                {lesson.description}
+              </p>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
