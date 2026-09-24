@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Loader2, Lock, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
+import {
+  CalendarClock,
+  Loader2,
+  Lock,
+  LockOpen,
+  Pencil,
+  Plus,
+  Send,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/States";
 import { useStudents } from "@/hooks/useStudents";
+import { useClassMembers } from "@/hooks/useClasses";
 
 function emptyQuestion(): QuizQuestion {
   return {
@@ -76,7 +87,14 @@ export function QuizzesTab({
       const patch =
         action === "close"
           ? { closed_at: new Date().toISOString() }
-          : { published: true, open_at: new Date().toISOString(), closed_at: null };
+          : action === "reopen"
+            ? {
+                published: true,
+                open_at: new Date().toISOString(),
+                closed_at: null,
+                due_date: null,
+              }
+            : { published: true, open_at: new Date().toISOString(), closed_at: null };
       const { error } = await supabase.from("quizzes").update(patch).eq("id", quiz.id);
       if (error) throw error;
     },
@@ -193,7 +211,7 @@ export function QuizzesTab({
                       }
                     >
                       <Send className="size-4" />
-                      {quizStatus(quiz) === "encerrado" ? "Reabrir" : "Liberar agora"}
+                      {quizStatus(quiz) === "encerrado" ? "Reabrir para a sala" : "Liberar agora"}
                     </Button>
                   )}
                   <Button variant="soft" size="sm" onClick={() => setEditing(quiz)}>
@@ -204,7 +222,7 @@ export function QuizzesTab({
                     size="sm"
                     onClick={() => setOpenQuiz(openQuiz === quiz.id ? null : quiz.id)}
                   >
-                    <Users className="size-4" /> Respostas
+                    <Users className="size-4" /> Alunos
                   </Button>
                   <Button
                     variant="ghost"
@@ -227,7 +245,43 @@ export function QuizzesTab({
 }
 
 function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
   const { data: students } = useStudents();
+  const { data: memberIds } = useClassMembers(quiz.class_id);
+  const reopenings = useQuery({
+    queryKey: ["quiz-reopenings", quiz.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("quiz_reopenings")
+        .select("student_id, until")
+        .eq("quiz_id", quiz.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const toggleReopen = useMutation({
+    mutationFn: async ({ studentId, grant }: { studentId: string; grant: boolean }) => {
+      const query = grant
+        ? supabase
+            .from("quiz_reopenings")
+            .upsert({ quiz_id: quiz.id, student_id: studentId, granted_by: session!.user.id })
+        : supabase
+            .from("quiz_reopenings")
+            .delete()
+            .eq("quiz_id", quiz.id)
+            .eq("student_id", studentId);
+      const { error } = await query;
+      if (error) throw error;
+      return grant;
+    },
+    onSuccess: (grant) => {
+      toast.success(grant ? "Quiz liberado para o aluno" : "Liberação removida");
+      queryClient.invalidateQueries({ queryKey: ["quiz-reopenings", quiz.id] });
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar"),
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["submissions", quiz.id],
     refetchInterval: 15000,
@@ -243,9 +297,64 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
   });
 
   const total = quiz.questions.reduce((sum, q) => sum + q.points, 0);
+  const answered = new Set((data ?? []).map((sub) => sub.student_id));
+  const pending = (students ?? []).filter(
+    (student) => (memberIds ?? []).includes(student.id) && !answered.has(student.id),
+  );
+  const reopenedFor = new Set(
+    (reopenings.data ?? [])
+      .filter((r) => !r.until || new Date(r.until) > new Date())
+      .map((r) => r.student_id),
+  );
 
   return (
-    <div className="animate-pop-in border-t border-border bg-secondary/30 p-4">
+    <div className="animate-pop-in space-y-4 border-t border-border bg-secondary/30 p-4">
+      {quiz.class_id && pending.length ? (
+        <div>
+          <p className="font-display text-sm font-semibold">
+            Ainda não responderam ({pending.length})
+          </p>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Libere o quiz só para quem faltou, mesmo com o quiz encerrado ou de outro trimestre.
+          </p>
+          <ul className="space-y-1.5">
+            {pending.map((student) => {
+              const reopened = reopenedFor.has(student.id);
+              return (
+                <li
+                  key={student.id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-border bg-card px-3 py-2"
+                >
+                  <p className="truncate text-sm">
+                    {student.name}
+                    {reopened ? (
+                      <span className="ml-2 rounded-full bg-success/12 px-2 py-0.5 text-xs font-semibold text-success">
+                        liberado
+                      </span>
+                    ) : null}
+                  </p>
+                  <Button
+                    variant={reopened ? "softDanger" : "softSuccess"}
+                    size="sm"
+                    disabled={toggleReopen.isPending}
+                    onClick={() => toggleReopen.mutate({ studentId: student.id, grant: !reopened })}
+                  >
+                    {reopened ? (
+                      <>
+                        <Lock className="size-4" /> Cancelar
+                      </>
+                    ) : (
+                      <>
+                        <LockOpen className="size-4" /> Liberar para o aluno
+                      </>
+                    )}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
       {isLoading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : !data?.length ? (

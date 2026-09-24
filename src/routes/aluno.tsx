@@ -189,20 +189,33 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
   } | null>(null);
 
   const quizzes = useQuery({
-    queryKey: ["published-quizzes", currentTerm()],
+    queryKey: ["published-quizzes"],
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
     queryFn: async (): Promise<Quiz[]> => {
       const { data, error } = await supabase
         .from("quizzes")
         .select(QUIZ_COLUMNS)
-        .eq("published", true)
-        .eq("term", currentTerm())
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []).map(parseQuiz);
     },
   });
+
+  const reopenings = useQuery({
+    queryKey: ["my-reopenings", session?.user.id],
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("quiz_reopenings")
+        .select("quiz_id, until")
+        .eq("student_id", session!.user.id);
+      if (error) throw error;
+      return (data ?? []).filter((r) => !r.until || new Date(r.until) > new Date());
+    },
+  });
+  const reopenedIds = new Set((reopenings.data ?? []).map((r) => r.quiz_id));
 
   const done = useQuery({
     queryKey: ["my-submissions", session?.user.id],
@@ -263,9 +276,14 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
     );
   }
 
-  const visible = (quizzes.data ?? []).filter(
-    (quiz) => quizStatus(quiz) !== "agendado" && quiz.questions.length > 0,
-  );
+  const term = currentTerm();
+  const visible = (quizzes.data ?? []).filter((quiz) => {
+    if (!quiz.questions.length) return false;
+    if (reopenedIds.has(quiz.id)) return true;
+    const status = quizStatus(quiz);
+    if (status === "agendado" || status === "rascunho") return false;
+    return quiz.term === term || status === "aberto";
+  });
 
   if (!visible.length) {
     return (
@@ -281,7 +299,8 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
       {visible.map((quiz) => {
         const submission = done.data?.find((s) => s.quiz_id === quiz.id);
         const total = quiz.questions.reduce((sum, q) => sum + q.points, 0);
-        const status = quizStatus(quiz);
+        const reopened = reopenedIds.has(quiz.id) && !submission;
+        const status = reopened ? "aberto" : quizStatus(quiz);
         return (
           <article key={quiz.id} className="surface animate-pop-in p-4">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -290,6 +309,12 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span>{quiz.questions.length} pergunta(s)</span>
                   <span>vale {total} pontos</span>
+                  {quiz.term !== term ? <span>{termLabel(quiz.term)}</span> : null}
+                  {reopened ? (
+                    <span className="rounded-full bg-success/12 px-2 py-0.5 font-semibold text-success">
+                      liberado para você
+                    </span>
+                  ) : null}
                   {quiz.due_date ? (
                     <span className="inline-flex items-center gap-1">
                       <CalendarClock className="size-3" />
