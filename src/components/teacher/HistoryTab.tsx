@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ruleLabel } from "@/lib/points";
+import { useRules } from "@/hooks/useRules";
 import { EmptyState } from "@/components/States";
 import { Button } from "@/components/ui/button";
 import { useStudents } from "@/hooks/useStudents";
@@ -32,6 +33,7 @@ export function HistoryTab({
 }) {
   const queryClient = useQueryClient();
   const { data: students } = useStudents();
+  const { data: rules } = useRules();
   const { data, isLoading } = useQuery({
     queryKey: ["class-history", classId, term],
     queryFn: async (): Promise<Row[]> => {
@@ -110,7 +112,7 @@ export function HistoryTab({
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{nameOf(row.student_id)}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {row.note ?? ruleLabel(row.type)} ·{" "}
+                {row.note ?? ruleLabel(row.type, rules?.rules)} ·{" "}
                 {new Date(row.created_at).toLocaleString("pt-BR", {
                   day: "2-digit",
                   month: "2-digit",

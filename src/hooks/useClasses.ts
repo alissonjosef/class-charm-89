@@ -61,6 +61,22 @@ export function useRenameClass() {
   });
 }
 
+export function useDeleteClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from("classes").delete().eq("id", id).select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Só quem criou a sala pode excluí-la");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["classes"] });
+      queryClient.invalidateQueries({ queryKey: ["quizzes"] });
+      queryClient.invalidateQueries({ queryKey: ["class-history"] });
+    },
+  });
+}
+
 export function useClassTeachers(classId: string | null) {
   return useQuery({
     queryKey: ["class-teachers", classId],

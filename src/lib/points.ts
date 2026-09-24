@@ -1,36 +1,34 @@
+export type RuleGroup = { id: string; name: string; sort_order: number };
+
 export type Rule = {
+  id: string;
+  group_id: string;
   key: string;
   label: string;
   points: number;
-  group: "presenca" | "material" | "atividades" | "destaque";
+  sort_order: number;
 };
 
-export const RULES: Rule[] = [
-  { key: "PRESENCA", label: "Presença", points: 10, group: "presenca" },
-  { key: "PONTUALIDADE", label: "Pontualidade", points: 10, group: "presenca" },
-  { key: "ATRASO", label: "Atraso", points: -5, group: "presenca" },
-  { key: "FALTA", label: "Falta não justificada", points: -10, group: "presenca" },
-  { key: "VISITANTE", label: "Trazer visitante", points: 50, group: "destaque" },
-  { key: "BIBLIA_SIM", label: "Trazer Bíblia", points: 20, group: "material" },
-  { key: "BIBLIA_NAO", label: "Não trazer Bíblia", points: -30, group: "material" },
-  { key: "REVISTA_SIM", label: "Trazer revista", points: 20, group: "material" },
-  { key: "REVISTA_NAO", label: "Não trazer revista", points: -30, group: "material" },
-  { key: "ATIV_PRAZO", label: "Atividade no prazo", points: 20, group: "atividades" },
-  { key: "ATIV_ATRASO", label: "Atividade com atraso", points: 5, group: "atividades" },
-  { key: "PONTUALIDADE_GERAL", label: "Pontualidade geral", points: 30, group: "destaque" },
-  { key: "DESTAQUE_MES", label: "Destaque do mês", points: 40, group: "destaque" },
-];
-
-export const GROUP_LABELS: Record<Rule["group"], string> = {
-  presenca: "Chamada",
-  material: "Material",
-  atividades: "Atividades",
-  destaque: "Conquistas",
+// Nomes das regras originais, para o extrato antigo caso a regra tenha sido excluída.
+const LEGACY_LABELS: Record<string, string> = {
+  PRESENCA: "Presença",
+  PONTUALIDADE: "Pontualidade",
+  ATRASO: "Atraso",
+  FALTA: "Falta não justificada",
+  VISITANTE: "Trazer visitante",
+  BIBLIA_SIM: "Trazer Bíblia",
+  BIBLIA_NAO: "Não trazer Bíblia",
+  REVISTA_SIM: "Trazer revista",
+  REVISTA_NAO: "Não trazer revista",
+  ATIV_PRAZO: "Atividade no prazo",
+  ATIV_ATRASO: "Atividade com atraso",
+  PONTUALIDADE_GERAL: "Pontualidade geral",
+  DESTAQUE_MES: "Destaque do mês",
 };
 
-export function ruleLabel(key: string) {
+export function ruleLabel(key: string, rules: Rule[] = []) {
   if (key === "QUIZ") return "Quiz respondido";
-  return RULES.find((r) => r.key === key)?.label ?? key;
+  return rules.find((r) => r.key === key)?.label ?? LEGACY_LABELS[key] ?? key;
 }
 
 export type Level = { name: string; min: number; emoji: string };

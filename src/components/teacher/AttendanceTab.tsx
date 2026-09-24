@@ -10,13 +10,12 @@ import { useStudents, type Student } from "@/hooks/useStudents";
 import { useTodayLesson } from "@/hooks/useLessons";
 import { todayInSaoPaulo } from "@/lib/terms";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
-import { GROUP_LABELS, RULES, levelFor, type Rule } from "@/lib/points";
+import { levelFor, type Rule } from "@/lib/points";
+import { useRules } from "@/hooks/useRules";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PointsBurst } from "@/components/Feedback";
 import { EmptyState } from "@/components/States";
-
-const GROUPS = ["presenca", "material", "atividades", "destaque"] as const;
 
 export function AttendanceTab({
   classId,
@@ -34,6 +33,7 @@ export function AttendanceTab({
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const { data: allStudents, isLoading } = useStudents();
+  const { data: rulesData } = useRules();
   const { data: members } = useClassMembers(classId === ALL_CLASSES ? null : classId);
   const { data: termPoints } = useTermPoints(term, classId === ALL_CLASSES ? null : classId);
   const pointsOf = (studentId: string) => termPoints?.[studentId] ?? 0;
@@ -192,34 +192,36 @@ export function AttendanceTab({
 
             {isOpen ? (
               <div className="animate-pop-in space-y-4 border-t border-border bg-secondary/30 p-4">
-                {GROUPS.map((group) => (
-                  <div key={group}>
+                {(rulesData?.groups ?? []).map((group) => (
+                  <div key={group.id}>
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {GROUP_LABELS[group]}
+                      {group.name}
                     </p>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {RULES.filter((r) => r.group === group).map((rule) => {
-                        const alreadyApplied = appliedToday.has(`${student.id}:${rule.key}`);
-                        return (
-                          <Button
-                            key={rule.key}
-                            size="sm"
-                            variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
-                            disabled={apply.isPending || alreadyApplied}
-                            onClick={() => apply.mutate({ student, rule })}
-                            className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left disabled:opacity-50"
-                          >
-                            <span className="text-xs font-medium leading-tight">
-                              {rule.label}
-                              {alreadyApplied ? " · já lançado" : ""}
-                            </span>
-                            <span className="font-display text-xs font-bold">
-                              {rule.points > 0 ? "+" : ""}
-                              {rule.points}
-                            </span>
-                          </Button>
-                        );
-                      })}
+                      {(rulesData?.rules ?? [])
+                        .filter((r) => r.group_id === group.id)
+                        .map((rule) => {
+                          const alreadyApplied = appliedToday.has(`${student.id}:${rule.key}`);
+                          return (
+                            <Button
+                              key={rule.key}
+                              size="sm"
+                              variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
+                              disabled={apply.isPending || alreadyApplied}
+                              onClick={() => apply.mutate({ student, rule })}
+                              className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left disabled:opacity-50"
+                            >
+                              <span className="text-xs font-medium leading-tight">
+                                {rule.label}
+                                {alreadyApplied ? " · já lançado" : ""}
+                              </span>
+                              <span className="font-display text-xs font-bold">
+                                {rule.points > 0 ? "+" : ""}
+                                {rule.points}
+                              </span>
+                            </Button>
+                          );
+                        })}
                     </div>
                   </div>
                 ))}
