@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClassMembers } from "@/hooks/useClasses";
 import { useTermPoints } from "@/hooks/useTermPoints";
 import { useStudents, type Student } from "@/hooks/useStudents";
+import { useTodayLesson } from "@/hooks/useLessons";
+import { todayInSaoPaulo } from "@/lib/terms";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import { GROUP_LABELS, RULES, levelFor, type Rule } from "@/lib/points";
 import { Button } from "@/components/ui/button";
@@ -46,6 +48,24 @@ export function AttendanceTab({
   const [search, setSearch] = useState("");
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
 
+  const today = todayInSaoPaulo();
+  const { data: todayLesson } = useTodayLesson();
+  const studentIds = (students ?? []).map((s) => s.id);
+  const { data: todayEntries } = useQuery({
+    queryKey: ["today-entries", today, studentIds.slice().sort().join(",")],
+    enabled: studentIds.length > 0,
+    queryFn: async (): Promise<{ student_id: string; type: string }[]> => {
+      const { data, error } = await supabase
+        .from("points_history")
+        .select("student_id, type")
+        .eq("entry_date", today)
+        .in("student_id", studentIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const appliedToday = new Set((todayEntries ?? []).map((row) => `${row.student_id}:${row.type}`));
+
   const apply = useMutation({
     mutationFn: async ({ student, rule }: { student: Student; rule: Rule }) => {
       const { error } = await supabase.from("points_history").insert({
@@ -55,6 +75,7 @@ export function AttendanceTab({
         note: rule.label,
         registered_by: session!.user.id,
         class_id: classId === ALL_CLASSES ? null : classId,
+        lesson_id: todayLesson?.id ?? null,
       });
       if (error) throw error;
       return { student, rule };
@@ -68,8 +89,16 @@ export function AttendanceTab({
       queryClient.invalidateQueries({ queryKey: ["students"] });
       queryClient.invalidateQueries({ queryKey: ["class-history"] });
       queryClient.invalidateQueries({ queryKey: ["term-points"] });
+      queryClient.invalidateQueries({ queryKey: ["today-entries"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Erro ao lançar"),
+    onError: (error: { code?: string } & Error) => {
+      if (error?.code === "23505") {
+        toast.error("Essa nota já foi lançada hoje para este aluno");
+        queryClient.invalidateQueries({ queryKey: ["today-entries"] });
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : "Erro ao lançar");
+    },
   });
 
   const filtered = (students ?? []).filter((s) =>
@@ -169,22 +198,28 @@ export function AttendanceTab({
                       {GROUP_LABELS[group]}
                     </p>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {RULES.filter((r) => r.group === group).map((rule) => (
-                        <Button
-                          key={rule.key}
-                          size="sm"
-                          variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
-                          disabled={apply.isPending}
-                          onClick={() => apply.mutate({ student, rule })}
-                          className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left"
-                        >
-                          <span className="text-xs font-medium leading-tight">{rule.label}</span>
-                          <span className="font-display text-xs font-bold">
-                            {rule.points > 0 ? "+" : ""}
-                            {rule.points}
-                          </span>
-                        </Button>
-                      ))}
+                      {RULES.filter((r) => r.group === group).map((rule) => {
+                        const alreadyApplied = appliedToday.has(`${student.id}:${rule.key}`);
+                        return (
+                          <Button
+                            key={rule.key}
+                            size="sm"
+                            variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
+                            disabled={apply.isPending || alreadyApplied}
+                            onClick={() => apply.mutate({ student, rule })}
+                            className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left disabled:opacity-50"
+                          >
+                            <span className="text-xs font-medium leading-tight">
+                              {rule.label}
+                              {alreadyApplied ? " · já lançado" : ""}
+                            </span>
+                            <span className="font-display text-xs font-bold">
+                              {rule.points > 0 ? "+" : ""}
+                              {rule.points}
+                            </span>
+                          </Button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}

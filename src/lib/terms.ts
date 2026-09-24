@@ -6,6 +6,11 @@ export function currentTerm(): string {
   return termOf(new Date());
 }
 
+/** Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo, igual à regra usada no banco. */
+export function todayInSaoPaulo(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+}
+
 export function termLabel(term: string): string {
   const [year, quarter] = term.split("-T");
   return `${quarter}º trimestre de ${year}`;

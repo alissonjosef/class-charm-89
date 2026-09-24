@@ -7,6 +7,7 @@ import { Confetti } from "@/components/Feedback";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AttendanceTab } from "@/components/teacher/AttendanceTab";
 import { HistoryTab } from "@/components/teacher/HistoryTab";
+import { LessonTab } from "@/components/teacher/LessonTab";
 import { QuizzesTab } from "@/components/teacher/QuizzesTab";
 import { ALL_CLASSES } from "@/components/teacher/ClassBar";
 import { currentTerm } from "@/lib/terms";
@@ -55,8 +56,9 @@ function TeacherPage() {
     >
       <Confetti fire={fire} />
       <Tabs defaultValue="chamada">
-        <TabsList className="mb-5 grid w-full grid-cols-3">
+        <TabsList className="mb-5 grid w-full grid-cols-4">
           <TabsTrigger value="chamada">Chamada</TabsTrigger>
+          <TabsTrigger value="aula">Aula</TabsTrigger>
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
         </TabsList>
@@ -68,6 +70,9 @@ function TeacherPage() {
             onTermChange={setTerm}
             onCelebrate={() => setFire((v) => v + 1)}
           />
+        </TabsContent>
+        <TabsContent value="aula">
+          <LessonTab />
         </TabsContent>
         <TabsContent value="extrato">
           <HistoryTab

@@ -95,7 +95,9 @@ export type Database = {
           class_id: string | null
           term: string
           created_at: string
+          entry_date: string
           id: string
+          lesson_id: string | null
           note: string | null
           points: number
           registered_by: string | null
@@ -106,7 +108,9 @@ export type Database = {
           class_id?: string | null
           term?: string
           created_at?: string
+          entry_date?: string
           id?: string
+          lesson_id?: string | null
           note?: string | null
           points: number
           registered_by?: string | null
@@ -117,7 +121,9 @@ export type Database = {
           class_id?: string | null
           term?: string
           created_at?: string
+          entry_date?: string
           id?: string
+          lesson_id?: string | null
           note?: string | null
           points?: number
           registered_by?: string | null
@@ -132,7 +138,41 @@ export type Database = {
             referencedRelation: "classes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "points_history_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      lessons: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          lesson_date: string
+          theme: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          lesson_date: string
+          theme: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          lesson_date?: string
+          theme?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
