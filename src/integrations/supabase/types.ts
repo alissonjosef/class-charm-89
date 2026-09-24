@@ -198,6 +198,38 @@ export type Database = {
         }
         Relationships: []
       }
+      quiz_reopenings: {
+        Row: {
+          created_at: string
+          granted_by: string | null
+          quiz_id: string
+          student_id: string
+          until: string | null
+        }
+        Insert: {
+          created_at?: string
+          granted_by?: string | null
+          quiz_id: string
+          student_id: string
+          until?: string | null
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string | null
+          quiz_id?: string
+          student_id?: string
+          until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_reopenings_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quizzes: {
         Row: {
           class_id: string | null
@@ -326,6 +358,20 @@ export type Database = {
       current_term: {
         Args: Record<string, never>
         Returns: string
+      }
+      can_manage_quiz: {
+        Args: {
+          _quiz_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      quiz_reopened_for: {
+        Args: {
+          _quiz_id: string
+          _user_id: string
+        }
+        Returns: boolean
       }
       quiz_is_open: {
         Args: {
