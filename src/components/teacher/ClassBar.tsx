@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Pencil, Plus, ShieldCheck, Users } from "lucide-react";
+import { Loader2, Pencil, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAuthorizeTeacher,
@@ -7,6 +7,7 @@ import {
   useClassTeachers,
   useClasses,
   useCreateClass,
+  useDeleteClass,
   useRenameClass,
   useToggleClassMember,
 } from "@/hooks/useClasses";
@@ -16,6 +17,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -48,12 +59,13 @@ export function ClassBar({
   manageable?: boolean;
 }) {
   const { data: classes, isLoading } = useClasses();
-  const [dialog, setDialog] = useState<"none" | "create" | "rename" | "members" | "teachers">(
-    "none",
-  );
+  const [dialog, setDialog] = useState<
+    "none" | "create" | "rename" | "members" | "teachers" | "delete"
+  >("none");
   const [name, setName] = useState("");
   const createClass = useCreateClass();
   const renameClass = useRenameClass();
+  const deleteClass = useDeleteClass();
   const selected = (classes ?? []).find((room) => room.id === classId);
 
   useEffect(() => {
@@ -132,6 +144,15 @@ export function ClassBar({
             <ShieldCheck className="size-4" />
             Professores
           </Button>
+          <Button
+            variant="softDanger"
+            size="sm"
+            disabled={!single}
+            onClick={() => setDialog("delete")}
+          >
+            <Trash2 className="size-4" />
+            Excluir
+          </Button>
         </>
       ) : null}
 
@@ -170,6 +191,43 @@ export function ClassBar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={dialog === "delete"}
+        onOpenChange={(value) => setDialog(value ? "delete" : "none")}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir a sala “{selected?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os quizzes desta sala são apagados e os alunos deixam de estar matriculados nela. O
+              extrato de pontos já lançado é mantido. Só quem criou a sala pode excluí-la.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteClass.isPending}
+              onClick={() => {
+                if (!selected) return;
+                deleteClass.mutate(selected.id, {
+                  onSuccess: () => {
+                    toast.success(`Sala “${selected.name}” excluída`);
+                    onChange(ALL_CLASSES);
+                  },
+                  onError: (error) =>
+                    toast.error(
+                      error instanceof Error ? error.message : "Não foi possível excluir a sala",
+                    ),
+                });
+              }}
+            >
+              Excluir sala
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <MembersDialog
         classId={single ? classId : null}

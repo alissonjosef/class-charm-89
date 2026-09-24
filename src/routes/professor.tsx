@@ -9,6 +9,7 @@ import { AttendanceTab } from "@/components/teacher/AttendanceTab";
 import { HistoryTab } from "@/components/teacher/HistoryTab";
 import { LessonTab } from "@/components/teacher/LessonTab";
 import { QuizzesTab } from "@/components/teacher/QuizzesTab";
+import { RulesTab } from "@/components/teacher/RulesTab";
 import { ALL_CLASSES } from "@/components/teacher/ClassBar";
 import { currentTerm } from "@/lib/terms";
 
@@ -56,11 +57,12 @@ function TeacherPage() {
     >
       <Confetti fire={fire} />
       <Tabs defaultValue="chamada">
-        <TabsList className="mb-5 grid w-full grid-cols-4">
+        <TabsList className="mb-5 grid w-full grid-cols-5">
           <TabsTrigger value="chamada">Chamada</TabsTrigger>
           <TabsTrigger value="aula">Aula</TabsTrigger>
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
+          <TabsTrigger value="regras">Regras</TabsTrigger>
         </TabsList>
         <TabsContent value="chamada">
           <AttendanceTab
@@ -89,6 +91,9 @@ function TeacherPage() {
             term={term}
             onTermChange={setTerm}
           />
+        </TabsContent>
+        <TabsContent value="regras">
+          <RulesTab />
         </TabsContent>
       </Tabs>
     </AppShell>

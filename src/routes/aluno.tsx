@@ -13,7 +13,8 @@ import { QuizReview } from "@/components/student/QuizReview";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { GROUP_LABELS, RULES, levelFor, ruleLabel } from "@/lib/points";
+import { levelFor, ruleLabel } from "@/lib/points";
+import { useRules } from "@/hooks/useRules";
 import { QUIZ_COLUMNS, parseQuiz, quizStatus, type PointEntry, type Quiz } from "@/lib/types";
 import { currentTerm, termLabel } from "@/lib/terms";
 
@@ -116,6 +117,7 @@ function ScoreHero({ points, term }: { points: number; term: string }) {
 
 function MyHistory() {
   const { session } = useAuth();
+  const { data: rules } = useRules();
   const { data, isLoading } = useQuery({
     queryKey: ["my-history", session?.user.id, currentTerm()],
     queryFn: async (): Promise<PointEntry[]> => {
@@ -153,9 +155,11 @@ function MyHistory() {
       {data.map((row) => (
         <li key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{row.note ?? ruleLabel(row.type)}</p>
+            <p className="truncate text-sm font-medium">
+              {row.note ?? ruleLabel(row.type, rules?.rules)}
+            </p>
             <p className="text-xs text-muted-foreground">
-              {ruleLabel(row.type)} ·{" "}
+              {ruleLabel(row.type, rules?.rules)} ·{" "}
               {new Date(row.created_at).toLocaleString("pt-BR", {
                 day: "2-digit",
                 month: "2-digit",
@@ -369,28 +373,37 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
 }
 
 function RulesCard() {
-  const groups = ["presenca", "material", "atividades", "destaque"] as const;
+  const { data, isLoading } = useRules();
+  if (isLoading) {
+    return (
+      <div className="grid place-items-center py-16">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
-      {groups.map((group) => (
-        <div key={group} className="surface overflow-hidden">
+      {(data?.groups ?? []).map((group) => (
+        <div key={group.id} className="surface overflow-hidden">
           <p className="border-b border-border px-4 py-3 font-display text-sm font-semibold">
-            {GROUP_LABELS[group]}
+            {group.name}
           </p>
           <ul className="divide-y divide-border">
-            {RULES.filter((r) => r.group === group).map((rule) => (
-              <li key={rule.key} className="flex items-center justify-between gap-3 px-4 py-3">
-                <span className="min-w-0 truncate text-sm">{rule.label}</span>
-                <span
-                  className={`shrink-0 font-display text-sm font-bold ${
-                    rule.points >= 0 ? "text-success" : "text-destructive"
-                  }`}
-                >
-                  {rule.points > 0 ? "+" : ""}
-                  {rule.points}
-                </span>
-              </li>
-            ))}
+            {(data?.rules ?? [])
+              .filter((r) => r.group_id === group.id)
+              .map((rule) => (
+                <li key={rule.key} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="min-w-0 truncate text-sm">{rule.label}</span>
+                  <span
+                    className={`shrink-0 font-display text-sm font-bold ${
+                      rule.points >= 0 ? "text-success" : "text-destructive"
+                    }`}
+                  >
+                    {rule.points > 0 ? "+" : ""}
+                    {rule.points}
+                  </span>
+                </li>
+              ))}
           </ul>
         </div>
       ))}
