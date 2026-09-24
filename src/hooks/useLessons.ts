@@ -10,9 +10,10 @@ export type Lesson = {
   description: string | null;
   created_by: string | null;
   created_at: string;
+  closed_at: string | null;
 };
 
-const LESSON_COLUMNS = "id, lesson_date, theme, description, created_by, created_at";
+const LESSON_COLUMNS = "id, lesson_date, theme, description, created_by, created_at, closed_at";
 
 export function useTodayLesson() {
   const today = todayInSaoPaulo();
@@ -75,6 +76,25 @@ export function useSaveLesson() {
         created_by: session!.user.id,
       });
       if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lesson"] });
+      queryClient.invalidateQueries({ queryKey: ["lessons"] });
+    },
+  });
+}
+
+export function useCloseLesson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, closed }: { id: string; closed: boolean }) => {
+      const { data, error } = await supabase
+        .from("lessons")
+        .update({ closed_at: closed ? new Date().toISOString() : null })
+        .eq("id", id)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Só quem abriu a aula pode encerrá-la");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lesson"] });

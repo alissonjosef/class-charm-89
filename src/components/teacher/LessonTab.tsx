@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2, Lock, LockOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/States";
-import { useLessons, useLessonTotals, useSaveLesson, useTodayLesson } from "@/hooks/useLessons";
+import {
+  useCloseLesson,
+  useLessons,
+  useLessonTotals,
+  useSaveLesson,
+  useTodayLesson,
+} from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { todayInSaoPaulo } from "@/lib/terms";
@@ -17,7 +23,21 @@ export function LessonTab() {
   const lessonIds = useMemo(() => (lessons ?? []).map((l) => l.id), [lessons]);
   const { data: totals } = useLessonTotals(lessonIds);
   const saveLesson = useSaveLesson();
+  const closeLesson = useCloseLesson();
   const { session } = useAuth();
+  const isClosed = Boolean(todayLesson?.closed_at);
+
+  function toggleClosed() {
+    if (!todayLesson) return;
+    closeLesson.mutate(
+      { id: todayLesson.id, closed: !isClosed },
+      {
+        onSuccess: () => toast.success(isClosed ? "Aula reaberta" : "Aula encerrada"),
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : "Erro ao atualizar a aula"),
+      },
+    );
+  }
   const [openId, setOpenId] = useState<string | null>(null);
   const openLesson = lessons?.find((l) => l.id === openId) ?? null;
 
@@ -60,9 +80,16 @@ export function LessonTab() {
   return (
     <div className="space-y-6">
       <div className="surface space-y-3 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {todayLesson ? "Aula de hoje" : "Abrir aula de hoje"}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {todayLesson ? "Aula de hoje" : "Abrir aula de hoje"}
+          </p>
+          {isClosed && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+              <Lock className="size-3" /> Encerrada
+            </span>
+          )}
+        </div>
         <Input
           value={theme}
           onChange={(e) => setTheme(e.target.value)}
@@ -74,9 +101,27 @@ export function LessonTab() {
           placeholder="Descrição opcional"
           rows={3}
         />
-        <Button onClick={submit} disabled={saveLesson.isPending}>
-          {todayLesson ? "Salvar alterações" : "Abrir aula"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={submit} disabled={saveLesson.isPending || isClosed}>
+            {todayLesson ? "Salvar alterações" : "Abrir aula"}
+          </Button>
+          {todayLesson && (
+            <Button
+              variant={isClosed ? "outline" : "softDanger"}
+              onClick={toggleClosed}
+              disabled={closeLesson.isPending}
+            >
+              {isClosed ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+              {isClosed ? "Reabrir aula" : "Encerrar aula"}
+            </Button>
+          )}
+        </div>
+        {isClosed && (
+          <p className="text-xs text-muted-foreground">
+            Com a aula encerrada, a chamada não lança mais pontos hoje. Reabra se precisar corrigir
+            algo.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -104,7 +149,12 @@ export function LessonTab() {
                     className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{lesson.theme}</p>
+                      <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+                        {lesson.closed_at && (
+                          <Lock className="size-3 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="truncate">{lesson.theme}</span>
+                      </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")}
                         {lesson.description ? ` · ${lesson.description}` : ""}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Loader2, Search } from "lucide-react";
+import { ChevronDown, Loader2, Lock, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -50,6 +50,7 @@ export function AttendanceTab({
 
   const today = todayInSaoPaulo();
   const { data: todayLesson } = useTodayLesson();
+  const lessonClosed = Boolean(todayLesson?.closed_at);
   const studentIds = (students ?? []).map((s) => s.id);
   const { data: todayEntries } = useQuery({
     queryKey: ["today-entries", today, studentIds.slice().sort().join(",")],
@@ -68,6 +69,8 @@ export function AttendanceTab({
 
   const apply = useMutation({
     mutationFn: async ({ student, rule }: { student: Student; rule: Rule }) => {
+      if (lessonClosed)
+        throw new Error("A aula de hoje foi encerrada. Reabra na aba Aula para lançar pontos.");
       const { error } = await supabase.from("points_history").insert({
         student_id: student.id,
         type: rule.key,
@@ -155,6 +158,13 @@ export function AttendanceTab({
           className="pl-9"
         />
       </div>
+      {lessonClosed && (
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
+          <Lock className="size-4 shrink-0" />
+          Aula de hoje encerrada — os lançamentos estão bloqueados. Reabra na aba “Aula” se precisar
+          corrigir algo.
+        </div>
+      )}
 
       {filtered.map((student, index) => {
         const { current } = levelFor(pointsOf(student.id));
@@ -207,7 +217,7 @@ export function AttendanceTab({
                               key={rule.key}
                               size="sm"
                               variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
-                              disabled={apply.isPending || alreadyApplied}
+                              disabled={apply.isPending || alreadyApplied || lessonClosed}
                               onClick={() => apply.mutate({ student, rule })}
                               className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left disabled:opacity-50"
                             >

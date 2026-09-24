@@ -242,6 +242,11 @@ function MyLessons() {
                         Aula de hoje
                       </span>
                     )}
+                    {lesson.closed_at && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">
+                        Encerrada
+                      </span>
+                    )}
                   </div>
                   <p className="truncate font-display text-base font-semibold">{lesson.theme}</p>
                   {lesson.description && (
