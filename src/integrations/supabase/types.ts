@@ -143,6 +143,7 @@ export type Database = {
       };
       lessons: {
         Row: {
+          closed_at: string | null;
           created_at: string;
           created_by: string | null;
           description: string | null;
@@ -151,6 +152,7 @@ export type Database = {
           theme: string;
         };
         Insert: {
+          closed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
           description?: string | null;
@@ -159,6 +161,7 @@ export type Database = {
           theme: string;
         };
         Update: {
+          closed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
           description?: string | null;
