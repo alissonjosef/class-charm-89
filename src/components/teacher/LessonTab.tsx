@@ -1,17 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, Loader2, Lock, LockOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/States";
-import {
-  useCloseLesson,
-  useLessons,
-  useLessonTotals,
-  useSaveLesson,
-  useTodayLesson,
-} from "@/hooks/useLessons";
+import { useCloseLesson, useLessons, useSaveLesson, useTodayLesson } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { todayInSaoPaulo } from "@/lib/terms";
@@ -20,8 +14,6 @@ export function LessonTab() {
   const today = todayInSaoPaulo();
   const { data: todayLesson, isLoading: loadingToday } = useTodayLesson();
   const { data: lessons, isLoading: loadingLessons } = useLessons();
-  const lessonIds = useMemo(() => (lessons ?? []).map((l) => l.id), [lessons]);
-  const { data: totals } = useLessonTotals(lessonIds);
   const saveLesson = useSaveLesson();
   const closeLesson = useCloseLesson();
   const { session } = useAuth();
@@ -140,13 +132,12 @@ export function LessonTab() {
         ) : (
           <ul className="surface divide-y divide-border overflow-hidden">
             {lessons.map((lesson) => {
-              const stats = totals?.[lesson.id];
               return (
                 <li key={lesson.id}>
                   <button
                     type="button"
                     onClick={() => setOpenId(lesson.id)}
-                    className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40"
+                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40"
                   >
                     <div className="min-w-0">
                       <p className="flex items-center gap-1.5 truncate text-sm font-medium">
@@ -158,12 +149,6 @@ export function LessonTab() {
                       <p className="truncate text-xs text-muted-foreground">
                         {new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")}
                         {lesson.description ? ` · ${lesson.description}` : ""}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="font-display text-sm font-bold">{stats?.total ?? 0} pts</p>
-                      <p className="text-xs text-muted-foreground">
-                        {stats?.count ?? 0} lançamentos
                       </p>
                     </div>
                     <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
