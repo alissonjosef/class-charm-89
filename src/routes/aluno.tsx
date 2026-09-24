@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, CheckCircle2, Loader2, Trophy } from "lucide-react";
+import { CalendarClock, CheckCircle2, Loader2, Lock, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
@@ -181,10 +181,17 @@ function MyHistory() {
 function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
   const { session } = useAuth();
   const [active, setActive] = useState<Quiz | null>(null);
-  const [reviewing, setReviewing] = useState<Quiz | null>(null);
+  const [reviewing, setReviewing] = useState<{
+    quiz: Quiz;
+    answers: number[];
+    score: number;
+    justSubmitted: boolean;
+  } | null>(null);
 
   const quizzes = useQuery({
     queryKey: ["published-quizzes", currentTerm()],
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<Quiz[]> => {
       const { data, error } = await supabase
         .from("quizzes")
@@ -214,21 +221,29 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
   });
 
   if (active) {
-    return <QuizRunner quiz={active} onClose={() => setActive(null)} onCelebrate={onCelebrate} />;
+    return (
+      <QuizRunner
+        quiz={active}
+        onClose={() => setActive(null)}
+        onCelebrate={onCelebrate}
+        onSubmitted={(answers, score) => {
+          setActive(null);
+          setReviewing({ quiz: active, answers, score, justSubmitted: true });
+        }}
+      />
+    );
   }
 
   if (reviewing) {
-    const submission = done.data?.find((s) => s.quiz_id === reviewing.id);
-    if (submission) {
-      return (
-        <QuizReview
-          quiz={reviewing}
-          answers={submission.answers}
-          score={submission.score_obtained}
-          onClose={() => setReviewing(null)}
-        />
-      );
-    }
+    return (
+      <QuizReview
+        quiz={reviewing.quiz}
+        answers={reviewing.answers}
+        score={reviewing.score}
+        justSubmitted={reviewing.justSubmitted}
+        onClose={() => setReviewing(null)}
+      />
+    );
   }
 
   if (quizzes.isLoading) {
@@ -239,7 +254,20 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
     );
   }
 
-  if (!quizzes.data?.length) {
+  if (quizzes.error) {
+    return (
+      <EmptyState
+        title="Não foi possível carregar as tarefas"
+        text={quizzes.error instanceof Error ? quizzes.error.message : "Tente novamente."}
+      />
+    );
+  }
+
+  const visible = (quizzes.data ?? []).filter(
+    (quiz) => quizStatus(quiz) !== "agendado" && quiz.questions.length > 0,
+  );
+
+  if (!visible.length) {
     return (
       <EmptyState
         title="Nenhuma tarefa liberada"
@@ -250,11 +278,10 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
 
   return (
     <div className="space-y-3">
-      {quizzes.data.map((quiz) => {
+      {visible.map((quiz) => {
         const submission = done.data?.find((s) => s.quiz_id === quiz.id);
         const total = quiz.questions.reduce((sum, q) => sum + q.points, 0);
         const status = quizStatus(quiz);
-        if (status !== "aberto" && !submission) return null;
         return (
           <article key={quiz.id} className="surface animate-pop-in p-4">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -276,10 +303,25 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-success/12 px-3 py-1 text-xs font-semibold text-success">
                     <CheckCircle2 className="size-3.5" /> {submission.score_obtained} pts
                   </span>
-                  <Button variant="soft" size="sm" onClick={() => setReviewing(quiz)}>
+                  <Button
+                    variant="soft"
+                    size="sm"
+                    onClick={() =>
+                      setReviewing({
+                        quiz,
+                        answers: submission.answers,
+                        score: submission.score_obtained,
+                        justSubmitted: false,
+                      })
+                    }
+                  >
                     Ver respostas
                   </Button>
                 </div>
+              ) : status === "encerrado" ? (
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-destructive/10 px-3 py-1 text-xs font-semibold text-destructive">
+                  <Lock className="size-3.5" /> Encerrado
+                </span>
               ) : (
                 <Button
                   variant="ink"

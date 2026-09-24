@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { Check, PartyPopper, X } from "lucide-react";
 import type { Quiz } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 
@@ -7,21 +7,44 @@ export function QuizReview({
   quiz,
   answers,
   score,
+  justSubmitted = false,
   onClose,
 }: {
   quiz: Quiz;
   answers: number[];
   score: number;
+  justSubmitted?: boolean;
   onClose: () => void;
 }) {
   const total = quiz.questions.reduce((sum, question) => sum + question.points, 0);
 
   return (
     <div className="surface animate-pop-in overflow-hidden">
+      {justSubmitted ? (
+        <div className="flex items-center gap-3 border-b border-border bg-gold/15 p-4">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gold text-gold-foreground">
+            <PartyPopper className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-display text-base font-semibold">Respostas enviadas!</h3>
+            <p className="text-xs text-muted-foreground">
+              Você fez{" "}
+              <b className="text-foreground">
+                {score} de {total}
+              </b>{" "}
+              pontos — já creditados no seu saldo. Confira suas respostas abaixo.
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border p-4">
         <div className="min-w-0">
           <h3 className="truncate font-display text-base font-semibold">{quiz.title}</h3>
-          <p className="text-xs text-muted-foreground">Você já respondeu — respostas bloqueadas.</p>
+          <p className="text-xs text-muted-foreground">
+            {justSubmitted
+              ? "Suas respostas e o gabarito."
+              : "Você já respondeu — respostas bloqueadas."}
+          </p>
         </div>
         <span className="shrink-0 rounded-full bg-gold px-3 py-1 font-display text-sm font-bold text-gold-foreground">
           {score}/{total}
