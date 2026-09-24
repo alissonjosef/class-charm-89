@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Check, Loader2, PartyPopper } from "lucide-react";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,18 +12,18 @@ export function QuizRunner({
   quiz,
   onClose,
   onCelebrate,
+  onSubmitted,
 }: {
   quiz: Quiz;
   onClose: () => void;
   onCelebrate: () => void;
+  onSubmitted: (answers: number[], score: number) => void;
 }) {
   const { session, refresh } = useAuth();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<number[]>(Array(quiz.questions.length).fill(-1));
-  const [result, setResult] = useState<{ score: number; total: number } | null>(null);
 
-  const total = quiz.questions.reduce((sum, q) => sum + q.points, 0);
   const question = quiz.questions[step]!;
 
   const submit = useMutation({
@@ -42,8 +42,8 @@ export function QuizRunner({
       return score;
     },
     onSuccess: async (score) => {
-      setResult({ score, total });
       if (score > 0) onCelebrate();
+      onSubmitted(answers, score);
       await refresh();
       queryClient.invalidateQueries({ queryKey: ["my-history"] });
       queryClient.invalidateQueries({ queryKey: ["my-submissions"] });
@@ -52,27 +52,6 @@ export function QuizRunner({
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : "Não foi possível enviar"),
   });
-
-  if (result) {
-    return (
-      <div className="surface animate-pop-in p-6 text-center">
-        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-gold text-gold-foreground">
-          <PartyPopper className="size-6" />
-        </span>
-        <h3 className="mt-4 font-display text-xl font-semibold">Respostas enviadas!</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Você acertou o equivalente a{" "}
-          <b className="text-foreground">
-            {result.score} de {result.total}
-          </b>{" "}
-          pontos — já creditados no seu saldo.
-        </p>
-        <Button variant="ink" className="mt-5" onClick={onClose}>
-          Voltar às tarefas
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="surface animate-pop-in overflow-hidden">

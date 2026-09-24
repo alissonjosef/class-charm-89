@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Loader2, Lock, Plus, Send, Trash2, Users } from "lucide-react";
+import { CalendarClock, Loader2, Lock, Pencil, Plus, Send, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -66,6 +66,7 @@ export function QuizzesTab({
   onTermChange: (value: string) => void;
 }) {
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Quiz | null>(null);
   const { data: quizzes, isLoading } = useQuizzes(term, classId === ALL_CLASSES ? null : classId);
   const [openQuiz, setOpenQuiz] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -100,6 +101,15 @@ export function QuizzesTab({
       <QuizForm
         classId={classId === ALL_CLASSES ? null : classId}
         onDone={() => setCreating(false)}
+      />
+    );
+
+  if (editing)
+    return (
+      <QuizForm
+        classId={editing.class_id ?? (classId === ALL_CLASSES ? null : classId)}
+        quiz={editing}
+        onDone={() => setEditing(null)}
       />
     );
 
@@ -186,6 +196,9 @@ export function QuizzesTab({
                       {quizStatus(quiz) === "encerrado" ? "Reabrir" : "Liberar agora"}
                     </Button>
                   )}
+                  <Button variant="soft" size="sm" onClick={() => setEditing(quiz)}>
+                    <Pencil className="size-4" /> Editar
+                  </Button>
                   <Button
                     variant="soft"
                     size="sm"
@@ -273,21 +286,53 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
   );
 }
 
-function QuizForm({ classId, onDone }: { classId: string | null; onDone: () => void }) {
+function toDateInput(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function toDateTimeInput(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${toDateInput(iso)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Prazo vale até o fim do dia escolhido. */
+function endOfDay(date: string) {
+  return new Date(`${date}T23:59:59`).toISOString();
+}
+
+function QuizForm({
+  classId,
+  quiz,
+  onDone,
+}: {
+  classId: string | null;
+  quiz?: Quiz;
+  onDone: () => void;
+}) {
   const { session } = useAuth();
   const queryClient = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [openAt, setOpenAt] = useState("");
-  const [questions, setQuestions] = useState<QuizQuestion[]>([emptyQuestion()]);
+  const [title, setTitle] = useState(quiz?.title ?? "");
+  const [description, setDescription] = useState(quiz?.description ?? "");
+  const [dueDate, setDueDate] = useState(toDateInput(quiz?.due_date ?? null));
+  const [openAt, setOpenAt] = useState(toDateTimeInput(quiz?.open_at ?? null));
+  const [questions, setQuestions] = useState<QuizQuestion[]>(
+    quiz?.questions.length
+      ? quiz.questions.map((q) => ({ ...q, options: [...q.options] }))
+      : [emptyQuestion()],
+  );
+  const status = quiz ? quizStatus(quiz) : "rascunho";
 
   function update(id: string, patch: Partial<QuizQuestion>) {
     setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
   }
 
   const save = useMutation({
-    mutationFn: async (mode: "draft" | "release") => {
+    mutationFn: async (mode: "draft" | "release" | "keep") => {
       if (!title.trim()) throw new Error("Informe o título do quiz");
       if (!classId) throw new Error("Selecione a sala do quiz antes de salvar");
       const clean = questions.map((q) => ({
@@ -302,12 +347,35 @@ function QuizForm({ classId, onDone }: { classId: string | null; onDone: () => v
         throw new Error("Marque a alternativa correta de cada pergunta");
 
       const scheduled = openAt ? new Date(openAt).toISOString() : null;
-      const { error } = await supabase.from("quizzes").insert({
+      const base = {
         title: title.trim(),
         description: description.trim() || null,
-        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        due_date: dueDate ? endOfDay(dueDate) : null,
         questions: clean,
         class_id: classId,
+      };
+
+      if (quiz) {
+        const keepRelease = mode === "keep";
+        const { error } = await supabase
+          .from("quizzes")
+          .update(
+            keepRelease
+              ? { ...base, open_at: scheduled ?? quiz.open_at }
+              : {
+                  ...base,
+                  open_at: mode === "release" ? (scheduled ?? new Date().toISOString()) : scheduled,
+                  published: mode === "release" || Boolean(scheduled),
+                  closed_at: mode === "release" ? null : quiz.closed_at,
+                },
+          )
+          .eq("id", quiz.id);
+        if (error) throw error;
+        return mode;
+      }
+
+      const { error } = await supabase.from("quizzes").insert({
+        ...base,
         open_at: mode === "release" ? (scheduled ?? new Date().toISOString()) : scheduled,
         published: mode === "release" || Boolean(scheduled),
         created_by: session!.user.id,
@@ -317,11 +385,13 @@ function QuizForm({ classId, onDone }: { classId: string | null; onDone: () => v
     },
     onSuccess: (mode) => {
       toast.success(
-        mode === "draft"
-          ? "Rascunho salvo. Libere quando quiser."
-          : openAt
-            ? "Quiz agendado para a sala!"
-            : "Quiz liberado para a sala!",
+        mode === "keep"
+          ? "Quiz atualizado!"
+          : mode === "draft"
+            ? "Rascunho salvo. Libere quando quiser."
+            : openAt
+              ? "Quiz agendado para a sala!"
+              : "Quiz liberado para a sala!",
       );
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
       onDone();
@@ -331,6 +401,16 @@ function QuizForm({ classId, onDone }: { classId: string | null; onDone: () => v
 
   return (
     <div className="space-y-4">
+      {quiz ? (
+        <p className="text-sm text-muted-foreground">
+          Editando <b className="text-foreground">{quiz.title}</b> · status atual:{" "}
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[status]}`}
+          >
+            {status}
+          </span>
+        </p>
+      ) : null}
       <div className="surface space-y-4 p-4">
         <div className="space-y-1.5">
           <Label htmlFor="title">Título</Label>
@@ -456,13 +536,22 @@ function QuizForm({ classId, onDone }: { classId: string | null; onDone: () => v
         <Button variant="soft" onClick={() => setQuestions((prev) => [...prev, emptyQuestion()])}>
           <Plus className="size-4" /> Adicionar pergunta
         </Button>
-        <Button variant="soft" disabled={save.isPending} onClick={() => save.mutate("draft")}>
-          Salvar rascunho
-        </Button>
-        <Button variant="ink" disabled={save.isPending} onClick={() => save.mutate("release")}>
-          {save.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-          {openAt ? "Agendar liberação" : "Liberar agora"}
-        </Button>
+        {quiz && status !== "rascunho" ? (
+          <Button variant="ink" disabled={save.isPending} onClick={() => save.mutate("keep")}>
+            {save.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            Salvar alterações
+          </Button>
+        ) : (
+          <>
+            <Button variant="soft" disabled={save.isPending} onClick={() => save.mutate("draft")}>
+              Salvar rascunho
+            </Button>
+            <Button variant="ink" disabled={save.isPending} onClick={() => save.mutate("release")}>
+              {save.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              {openAt ? "Agendar liberação" : "Liberar agora"}
+            </Button>
+          </>
+        )}
         <Button variant="ghost" onClick={onDone}>
           Cancelar
         </Button>
