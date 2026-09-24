@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, CalendarClock, CheckCircle2, Loader2, Lock, Trophy } from "lucide-react";
+import {
+  BookOpen,
+  CalendarClock,
+  CheckCircle2,
+  ChevronRight,
+  Loader2,
+  Lock,
+  Trophy,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
@@ -16,6 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import { levelFor, ruleLabel } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
 import { useLessons } from "@/hooks/useLessons";
+import { LessonDialog } from "@/components/LessonDialog";
 import { QUIZ_COLUMNS, parseQuiz, quizStatus, type PointEntry, type Quiz } from "@/lib/types";
 import { currentTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
 
@@ -190,6 +199,8 @@ function MyHistory() {
 function MyLessons() {
   const { data: lessons, isLoading } = useLessons();
   const today = todayInSaoPaulo();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openLesson = lessons?.find((l) => l.id === openId) ?? null;
 
   if (isLoading) {
     return (
@@ -209,33 +220,44 @@ function MyLessons() {
   }
 
   return (
-    <ul className="space-y-3">
-      {lessons.map((lesson) => {
-        const isToday = lesson.lesson_date === today;
-        return (
-          <li
-            key={lesson.id}
-            className={`surface space-y-2 p-4 ${isToday ? "ring-2 ring-primary/40" : ""}`}
-          >
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <BookOpen className="size-3.5" />
-              <span>{new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")}</span>
-              {isToday && (
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                  Aula de hoje
-                </span>
-              )}
-            </div>
-            <p className="font-display text-base font-semibold">{lesson.theme}</p>
-            {lesson.description && (
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                {lesson.description}
-              </p>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <ul className="space-y-3">
+        {lessons.map((lesson) => {
+          const isToday = lesson.lesson_date === today;
+          return (
+            <li key={lesson.id}>
+              <button
+                type="button"
+                onClick={() => setOpenId(lesson.id)}
+                className={`surface grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40 ${isToday ? "ring-2 ring-primary/40" : ""}`}
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <BookOpen className="size-3.5" />
+                    <span>
+                      {new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")}
+                    </span>
+                    {isToday && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        Aula de hoje
+                      </span>
+                    )}
+                  </div>
+                  <p className="truncate font-display text-base font-semibold">{lesson.theme}</p>
+                  {lesson.description && (
+                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                      {lesson.description}
+                    </p>
+                  )}
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <LessonDialog lesson={openLesson} onClose={() => setOpenId(null)} />
+    </>
   );
 }
 

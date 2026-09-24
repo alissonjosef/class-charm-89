@@ -83,6 +83,21 @@ export function useSaveLesson() {
   });
 }
 
+export function useDeleteLesson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from("lessons").delete().eq("id", id).select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Só quem abriu a aula pode excluí-la");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lesson"] });
+      queryClient.invalidateQueries({ queryKey: ["lessons"] });
+    },
+  });
+}
+
 /** Total de pontos e quantidade de lançamentos vinculados a cada aula, para a tela de análise. */
 export function useLessonTotals(lessonIds: string[]) {
   return useQuery({
