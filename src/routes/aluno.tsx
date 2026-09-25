@@ -245,12 +245,16 @@ function MyLessons() {
       <ul className="space-y-3">
         {lessons.map((lesson) => {
           const isToday = lesson.lesson_date === today;
+          const closed = Boolean(lesson.closed_at);
           return (
             <li key={lesson.id}>
               <button
                 type="button"
-                onClick={() => setOpenId(lesson.id)}
-                className={`surface grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40 ${isToday ? "ring-2 ring-primary/40" : ""}`}
+                onClick={() => !closed && setOpenId(lesson.id)}
+                disabled={closed}
+                aria-disabled={closed}
+                title={closed ? "Aula encerrada pelo professor" : "Abrir aula"}
+                className={`surface grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition ${closed ? "cursor-not-allowed opacity-70" : "hover:bg-accent/40"} ${isToday ? "ring-2 ring-primary/40" : ""}`}
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -263,12 +267,13 @@ function MyLessons() {
                         Aula de hoje
                       </span>
                     )}
-                    {lesson.closed_at && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">
-                        Encerrada
+                    {closed && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">
+                        <Lock className="size-3" /> Encerrada
                       </span>
                     )}
                   </div>
+                  <p className="text-xs font-semibold text-primary">{lessonTag(lesson)}</p>
                   <p className="truncate font-display text-base font-semibold">{lesson.theme}</p>
                   {lesson.description && (
                     <p className="line-clamp-2 text-sm text-muted-foreground">
@@ -276,7 +281,11 @@ function MyLessons() {
                     </p>
                   )}
                 </div>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                {closed ? (
+                  <Lock className="size-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                )}
               </button>
             </li>
           );

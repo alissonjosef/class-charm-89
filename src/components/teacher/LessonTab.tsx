@@ -137,6 +137,9 @@ export function LessonTab() {
           )}
         </div>
         <div className="grid gap-2 sm:grid-cols-[10rem_minmax(0,1fr)]">
+          <label className="text-xs font-medium text-muted-foreground sm:col-span-2">
+            Lição e título da aula
+          </label>
           <Select value={lessonNumber} onValueChange={setLessonNumber} disabled={isClosed}>
             <SelectTrigger>
               <SelectValue placeholder="Lição" />
@@ -154,17 +157,20 @@ export function LessonTab() {
           <Input
             value={theme}
             onChange={(e) => setTheme(e.target.value)}
-            placeholder="Tema da aula (ex.: A parábola do semeador)"
+            placeholder="Título da aula (ex.: A parábola do semeador)"
             disabled={isClosed}
           />
         </div>
-        <Textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Descrição opcional"
-          rows={3}
-          disabled={isClosed}
-        />
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">Conteúdo da aula</span>
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Escreva o conteúdo, versículos e pontos principais da aula. Os alunos veem isso no histórico."
+            rows={6}
+            disabled={isClosed}
+          />
+        </label>
         <div className="flex flex-wrap gap-2">
           <Button onClick={submit} disabled={saveLesson.isPending || isClosed}>
             {todayLesson ? "Salvar alterações" : "Abrir aula"}
