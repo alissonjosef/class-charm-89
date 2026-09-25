@@ -56,7 +56,7 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
   function save() {
     if (!lesson) return;
     if (!theme.trim()) {
-      toast.error("Informe o tema da aula");
+      toast.error("Informe o título da aula");
       return;
     }
     saveLesson.mutate(
@@ -107,7 +107,7 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
                   <Input
                     value={theme}
                     onChange={(e) => setTheme(e.target.value)}
-                    placeholder="Tema da aula"
+                    placeholder="Título da aula"
                     className="mt-2"
                   />
                 ) : (
@@ -165,7 +165,7 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir a aula “{lesson?.theme}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              O tema e o conteúdo somem para os alunos. Os pontos já lançados nesta aula continuam
+              O título e o conteúdo somem para os alunos. Os pontos já lançados nesta aula continuam
               no extrato, apenas deixam de ficar agrupados por aula.
             </AlertDialogDescription>
           </AlertDialogHeader>
