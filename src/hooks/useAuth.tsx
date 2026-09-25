@@ -15,6 +15,7 @@ type AuthState = {
   session: Session | null;
   profile: Profile | null;
   role: Role | null;
+  isMaster: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -26,16 +27,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<Role | null>(null);
+  const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function load(userId: string) {
-    const [{ data: prof }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("id, name, email, total_points").eq("id", userId).maybeSingle(),
+    const [{ data: prof }, { data: roles }, { data: master }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, name, email, total_points")
+        .eq("id", userId)
+        .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
+      supabase.from("masters").select("user_id").eq("user_id", userId).maybeSingle(),
     ]);
     setProfile((prof as Profile | null) ?? null);
     const found = roles?.[0]?.role as Role | undefined;
-    setRole(found ?? null);
+    setIsMaster(Boolean(master));
+    setRole(master ? "teacher" : (found ?? null));
   }
 
   useEffect(() => {
@@ -44,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!next) {
         setProfile(null);
         setRole(null);
+        setIsMaster(false);
         setLoading(false);
       }
     });
@@ -73,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     profile,
     role,
+    isMaster,
     loading,
     refresh: async () => {
       if (session) await load(session.user.id);
@@ -82,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setProfile(null);
       setRole(null);
+      setIsMaster(false);
     },
   };
 
