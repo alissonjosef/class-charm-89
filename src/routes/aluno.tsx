@@ -23,9 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { levelFor, ruleLabel } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
-import { useLessons } from "@/hooks/useLessons";
+import { lessonTag, useLessons } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
-import { QUIZ_COLUMNS, parseQuiz, quizStatus, type PointEntry, type Quiz } from "@/lib/types";
+import { QUIZ_COLUMNS, parseQuiz, quizStatus, type Quiz } from "@/lib/types";
 import { currentTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
 
 export const Route = createFileRoute("/aluno")({
@@ -129,21 +129,30 @@ function ScoreHero({ points, term }: { points: number; term: string }) {
   );
 }
 
+type MyEntry = {
+  id: string;
+  type: string;
+  points: number;
+  note: string | null;
+  created_at: string;
+  lessons: { lesson_number: number | null; lesson_date: string; theme: string } | null;
+};
+
 function MyHistory() {
   const { session } = useAuth();
   const { data: rules } = useRules();
   const { data, isLoading } = useQuery({
     queryKey: ["my-history", session?.user.id, currentTerm()],
-    queryFn: async (): Promise<PointEntry[]> => {
+    queryFn: async (): Promise<MyEntry[]> => {
       const { data, error } = await supabase
         .from("points_history")
-        .select("id, student_id, type, points, note, created_at")
+        .select("id, type, points, note, created_at, lessons(lesson_number, lesson_date, theme)")
         .eq("student_id", session!.user.id)
         .eq("term", currentTerm())
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
-      return (data ?? []) as PointEntry[];
+      return (data ?? []) as MyEntry[];
     },
   });
 
@@ -181,6 +190,14 @@ function MyHistory() {
                 minute: "2-digit",
               })}
             </p>
+            {row.lessons ? (
+              <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                <BookOpen className="size-3 shrink-0" />
+                <span className="truncate">
+                  {lessonTag(row.lessons)} · {row.lessons.theme}
+                </span>
+              </p>
+            ) : null}
           </div>
           <span
             className={`shrink-0 font-display text-base font-bold ${

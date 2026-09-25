@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { todayInSaoPaulo } from "@/lib/terms";
+import { semesterLabel, semesterOf, todayInSaoPaulo } from "@/lib/terms";
 
 export type Lesson = {
   id: string;
   lesson_date: string;
+  lesson_number: number | null;
   theme: string;
   description: string | null;
   created_by: string | null;
@@ -13,7 +14,14 @@ export type Lesson = {
   closed_at: string | null;
 };
 
-const LESSON_COLUMNS = "id, lesson_date, theme, description, created_by, created_at, closed_at";
+const LESSON_COLUMNS =
+  "id, lesson_date, lesson_number, theme, description, created_by, created_at, closed_at";
+
+/** "Lição 3 · 2º semestre de 2026" — usado no card da aula e no extrato. */
+export function lessonTag(lesson: { lesson_number: number | null; lesson_date: string }): string {
+  const semester = semesterLabel(semesterOf(lesson.lesson_date));
+  return lesson.lesson_number ? `Lição ${lesson.lesson_number} · ${semester}` : semester;
+}
 
 export function useTodayLesson() {
   const today = todayInSaoPaulo();
@@ -53,24 +61,27 @@ export function useSaveLesson() {
     mutationFn: async ({
       id,
       lessonDate,
+      lessonNumber,
       theme,
       description,
     }: {
       id?: string;
       lessonDate: string;
+      lessonNumber: number | null;
       theme: string;
       description: string;
     }) => {
       if (id) {
         const { error } = await supabase
           .from("lessons")
-          .update({ theme, description: description || null })
+          .update({ theme, description: description || null, lesson_number: lessonNumber })
           .eq("id", id);
         if (error) throw error;
         return;
       }
       const { error } = await supabase.from("lessons").insert({
         lesson_date: lessonDate,
+        lesson_number: lessonNumber,
         theme,
         description: description || null,
         created_by: session!.user.id,
