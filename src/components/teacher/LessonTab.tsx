@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, Loader2, Lock, LockOpen } from "lucide-react";
+import { BookOpen, ChevronRight, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,14 +12,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/States";
-import {
-  useCloseLesson,
-  useLessons,
-  useSaveLesson,
-  useTodayLesson,
-  type Lesson,
-} from "@/hooks/useLessons";
+import { useLessons, useSaveLesson, useTodayLesson, type Lesson } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
+import { WeeklyVerseCard } from "@/components/teacher/WeeklyVerseCard";
 import { useAuth } from "@/hooks/useAuth";
 import {
   LESSONS_PER_SEMESTER,
@@ -37,7 +32,6 @@ export function LessonTab() {
   const { data: todayLesson, isLoading: loadingToday } = useTodayLesson();
   const { data: lessons, isLoading: loadingLessons } = useLessons();
   const saveLesson = useSaveLesson();
-  const closeLesson = useCloseLesson();
   const { session } = useAuth();
   const isClosed = Boolean(todayLesson?.closed_at);
 
@@ -49,17 +43,6 @@ export function LessonTab() {
     (n) => !usedNumbers.has(n),
   );
 
-  function toggleClosed() {
-    if (!todayLesson) return;
-    closeLesson.mutate(
-      { id: todayLesson.id, closed: !isClosed },
-      {
-        onSuccess: () => toast.success(isClosed ? "Aula reaberta" : "Aula encerrada"),
-        onError: (error) =>
-          toast.error(error instanceof Error ? error.message : "Erro ao atualizar a aula"),
-      },
-    );
-  }
   const [openId, setOpenId] = useState<string | null>(null);
   const openLesson = lessons?.find((l) => l.id === openId) ?? null;
 
@@ -82,7 +65,7 @@ export function LessonTab() {
 
   function submit() {
     if (!theme.trim()) {
-      toast.error("Informe o tema da aula");
+      toast.error("Informe o título da aula");
       return;
     }
     saveLesson.mutate(
@@ -176,23 +159,22 @@ export function LessonTab() {
             {todayLesson ? "Salvar alterações" : "Abrir aula"}
           </Button>
           {todayLesson && (
-            <Button
-              variant={isClosed ? "outline" : "softDanger"}
-              onClick={toggleClosed}
-              disabled={closeLesson.isPending}
-            >
-              {isClosed ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
-              {isClosed ? "Reabrir aula" : "Encerrar aula"}
+            <Button variant="outline" onClick={() => setOpenId(todayLesson.id)}>
+              <BookOpen className="size-4" />
+              {isClosed ? "Ver / reabrir aula" : "Ver / encerrar aula"}
             </Button>
           )}
         </div>
-        {isClosed && (
-          <p className="text-xs text-muted-foreground">
-            Com a aula encerrada, a chamada não lança mais pontos hoje. Reabra se precisar corrigir
-            algo.
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          {isClosed
+            ? "Aula encerrada: a chamada não lança mais pontos hoje. Abra a aula para reabrir se precisar corrigir algo."
+            : todayLesson
+              ? "Para encerrar a aula, abra-a e use o botão Encerrar aula."
+              : ""}
+        </p>
       </div>
+
+      <WeeklyVerseCard />
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">

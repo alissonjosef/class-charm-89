@@ -141,6 +141,36 @@ export type Database = {
           },
         ];
       };
+      weekly_verses: {
+        Row: {
+          id: string;
+          release_date: string;
+          reference: string;
+          verse_text: string;
+          theme: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          release_date: string;
+          reference: string;
+          verse_text: string;
+          theme?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          release_date?: string;
+          reference?: string;
+          verse_text?: string;
+          theme?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       masters: {
         Row: { user_id: string; created_at: string };
         Insert: { user_id: string; created_at?: string };
