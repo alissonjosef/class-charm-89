@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Loader2, Lock, Search } from "lucide-react";
+import { Check, ChevronDown, Loader2, Lock, Search, Trophy, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,7 +8,8 @@ import { useClassMembers } from "@/hooks/useClasses";
 import { useTermPoints } from "@/hooks/useTermPoints";
 import { useStudents, type Student } from "@/hooks/useStudents";
 import { useTodayLesson } from "@/hooks/useLessons";
-import { todayInSaoPaulo } from "@/lib/terms";
+import { useMonthPoints } from "@/hooks/useMonthPoints";
+import { monthLabel, monthOf, todayInSaoPaulo } from "@/lib/terms";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import { levelFor, type Rule } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
@@ -47,25 +48,73 @@ export function AttendanceTab({
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
+  const [showRanking, setShowRanking] = useState(false);
 
   const today = todayInSaoPaulo();
+  const month = monthOf(today);
+  const { data: monthPoints } = useMonthPoints(month);
+  const ranking = (allStudents ?? [])
+    .map((student) => ({
+      student,
+      totals: monthPoints?.[student.id] ?? { positive: 0, negative: 0, net: 0 },
+    }))
+    .sort((a, b) => b.totals.net - a.totals.net);
+  const rankOf = new Map(ranking.map((row, index) => [row.student.id, index + 1]));
   const { data: todayLesson } = useTodayLesson();
   const lessonClosed = Boolean(todayLesson?.closed_at);
   const studentIds = (students ?? []).map((s) => s.id);
   const { data: todayEntries } = useQuery({
     queryKey: ["today-entries", today, studentIds.slice().sort().join(",")],
     enabled: studentIds.length > 0,
-    queryFn: async (): Promise<{ student_id: string; type: string }[]> => {
+    queryFn: async (): Promise<{ id: string; student_id: string; type: string }[]> => {
       const { data, error } = await supabase
         .from("points_history")
-        .select("student_id, type")
+        .select("id, student_id, type")
         .eq("entry_date", today)
         .in("student_id", studentIds);
       if (error) throw error;
       return data ?? [];
     },
   });
-  const appliedToday = new Set((todayEntries ?? []).map((row) => `${row.student_id}:${row.type}`));
+  const appliedToday = new Map(
+    (todayEntries ?? []).map((row) => [`${row.student_id}:${row.type}`, row.id]),
+  );
+
+  function invalidatePoints() {
+    queryClient.invalidateQueries({ queryKey: ["students"] });
+    queryClient.invalidateQueries({ queryKey: ["class-history"] });
+    queryClient.invalidateQueries({ queryKey: ["term-points"] });
+    queryClient.invalidateQueries({ queryKey: ["month-points"] });
+    queryClient.invalidateQueries({ queryKey: ["today-entries"] });
+  }
+
+  const undo = useMutation({
+    mutationFn: async ({
+      entryId,
+      student,
+      rule,
+    }: {
+      entryId: string;
+      student: Student;
+      rule: Rule;
+    }) => {
+      if (lessonClosed)
+        throw new Error("A aula de hoje foi encerrada. Reabra na aba Aula para corrigir.");
+      const { data, error } = await supabase
+        .from("points_history")
+        .delete()
+        .eq("id", entryId)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Esse lançamento não pode ser desfeito");
+      return { student, rule };
+    },
+    onSuccess: ({ student, rule }) => {
+      toast.success(`${rule.label} desfeito para ${student.name}`);
+      invalidatePoints();
+    },
+    onError: (error: Error) => toast.error(error.message || "Erro ao desfazer"),
+  });
 
   const apply = useMutation({
     mutationFn: async ({ student, rule }: { student: Student; rule: Rule }) => {
@@ -89,10 +138,7 @@ export function AttendanceTab({
       toast.success(`${rule.label} para ${student.name}`, {
         description: `${rule.points > 0 ? "+" : ""}${rule.points} pontos`,
       });
-      queryClient.invalidateQueries({ queryKey: ["students"] });
-      queryClient.invalidateQueries({ queryKey: ["class-history"] });
-      queryClient.invalidateQueries({ queryKey: ["term-points"] });
-      queryClient.invalidateQueries({ queryKey: ["today-entries"] });
+      invalidatePoints();
     },
     onError: (error: { code?: string } & Error) => {
       if (error?.code === "23505") {
@@ -124,7 +170,6 @@ export function AttendanceTab({
           onChange={onClassChange}
           term={term}
           onTermChange={onTermChange}
-          manageable
         />
         <EmptyState
           title={
@@ -133,7 +178,7 @@ export function AttendanceTab({
           text={
             classId === ALL_CLASSES
               ? "Peça para os alunos criarem a conta escolhendo o perfil “Aluno”. Eles aparecerão aqui automaticamente."
-              : "Use “Alunos da sala” para escolher quem faz parte desta turma."
+              : "Na aba “Salas”, use “Alunos” para escolher quem faz parte desta turma."
           }
         />
       </>
@@ -147,8 +192,71 @@ export function AttendanceTab({
         onChange={onClassChange}
         term={term}
         onTermChange={onTermChange}
-        manageable
       />
+
+      <section className="surface overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowRanking((v) => !v)}
+          aria-expanded={showRanking}
+          className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4 text-left"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gold text-gold-foreground">
+            <Trophy className="size-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block font-display text-sm font-semibold">
+              Destaque do mês · {monthLabel(month)}
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {ranking[0] && ranking[0].totals.net > 0
+                ? `1º ${ranking[0].student.name} · ${ranking[0].totals.net} pontos`
+                : "Ranking geral de todas as salas, pelo saldo do mês"}
+            </span>
+          </span>
+          <ChevronDown
+            className={`size-4 text-muted-foreground transition-transform ${showRanking ? "rotate-180" : ""}`}
+          />
+        </button>
+        {showRanking ? (
+          <ol className="animate-pop-in divide-y divide-border border-t border-border">
+            {ranking.map(({ student, totals }, index) => (
+              <li
+                key={student.id}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5"
+              >
+                <span
+                  className={`grid size-8 shrink-0 place-items-center rounded-lg font-display text-xs font-bold ${
+                    index === 0
+                      ? "bg-gold text-gold-foreground"
+                      : index < 3
+                        ? "bg-ink text-ink-foreground"
+                        : "bg-secondary text-secondary-foreground"
+                  }`}
+                >
+                  {index + 1}º
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{student.name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    <span className="text-success">+{totals.positive}</span>
+                    {totals.negative ? (
+                      <>
+                        {" − "}
+                        <span className="text-destructive">{Math.abs(totals.negative)}</span>
+                      </>
+                    ) : null}
+                    {" = "}
+                    saldo
+                  </span>
+                </span>
+                <span className="font-display text-sm font-bold">{totals.net}</span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+      </section>
+
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -166,8 +274,9 @@ export function AttendanceTab({
         </div>
       )}
 
-      {filtered.map((student, index) => {
+      {filtered.map((student) => {
         const { current } = levelFor(pointsOf(student.id));
+        const rank = rankOf.get(student.id);
         const isOpen = open === student.id;
         return (
           <article key={student.id} className="surface overflow-hidden">
@@ -177,8 +286,15 @@ export function AttendanceTab({
               className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 text-left"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary font-display text-sm font-semibold text-secondary-foreground">
-                  {index + 1}
+                <span
+                  title={`${rank}º no ranking do mês (todas as salas)`}
+                  className={`grid size-10 shrink-0 place-items-center rounded-xl font-display text-sm font-semibold ${
+                    rank === 1
+                      ? "bg-gold text-gold-foreground"
+                      : "bg-secondary text-secondary-foreground"
+                  }`}
+                >
+                  {rank}º
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{student.name}</span>
@@ -211,19 +327,45 @@ export function AttendanceTab({
                       {(rulesData?.rules ?? [])
                         .filter((r) => r.group_id === group.id)
                         .map((rule) => {
-                          const alreadyApplied = appliedToday.has(`${student.id}:${rule.key}`);
+                          const entryId = appliedToday.get(`${student.id}:${rule.key}`);
+                          const busy = apply.isPending || undo.isPending;
+                          if (entryId) {
+                            return (
+                              <Button
+                                key={rule.key}
+                                size="sm"
+                                variant={rule.points >= 0 ? "success" : "destructive"}
+                                disabled={busy || lessonClosed}
+                                onClick={() => undo.mutate({ entryId, student, rule })}
+                                aria-pressed
+                                title="Toque para desfazer"
+                                className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left"
+                              >
+                                <span className="flex items-center gap-1 text-xs font-medium leading-tight">
+                                  <Check className="size-3.5" />
+                                  {rule.label}
+                                </span>
+                                <span className="flex items-center gap-1 font-display text-xs font-bold">
+                                  {rule.points > 0 ? "+" : ""}
+                                  {rule.points}
+                                  <span className="flex items-center gap-0.5 font-sans text-[10px] font-normal opacity-80">
+                                    <Undo2 className="size-3" /> desfazer
+                                  </span>
+                                </span>
+                              </Button>
+                            );
+                          }
                           return (
                             <Button
                               key={rule.key}
                               size="sm"
                               variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
-                              disabled={apply.isPending || alreadyApplied || lessonClosed}
+                              disabled={busy || lessonClosed}
                               onClick={() => apply.mutate({ student, rule })}
-                              className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left disabled:opacity-50"
+                              className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left active:scale-[0.98]"
                             >
                               <span className="text-xs font-medium leading-tight">
                                 {rule.label}
-                                {alreadyApplied ? " · já lançado" : ""}
                               </span>
                               <span className="font-display text-xs font-bold">
                                 {rule.points > 0 ? "+" : ""}

@@ -51,12 +51,14 @@ export function ClassBar({
   term,
   onTermChange,
   manageable = false,
+  showTerm = true,
 }: {
   classId: string;
   onChange: (value: string) => void;
   term: string;
   onTermChange: (value: string) => void;
   manageable?: boolean;
+  showTerm?: boolean;
 }) {
   const { data: classes, isLoading } = useClasses();
   const [dialog, setDialog] = useState<
@@ -112,19 +114,21 @@ export function ClassBar({
         </SelectContent>
       </Select>
 
-      <Select value={term} onValueChange={onTermChange}>
-        <SelectTrigger className="w-full sm:w-52">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {recentTerms().map((value) => (
-            <SelectItem key={value} value={value}>
-              {termLabel(value)}
-              {value === currentTerm() ? " (atual)" : ""}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {showTerm ? (
+        <Select value={term} onValueChange={onTermChange}>
+          <SelectTrigger className="w-full sm:w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {recentTerms().map((value) => (
+              <SelectItem key={value} value={value}>
+                {termLabel(value)}
+                {value === currentTerm() ? " (atual)" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
 
       {manageable ? (
         <>

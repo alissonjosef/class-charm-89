@@ -6,6 +6,7 @@ import { FullPageLoader } from "@/components/States";
 import { Confetti } from "@/components/Feedback";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AttendanceTab } from "@/components/teacher/AttendanceTab";
+import { ClassesTab } from "@/components/teacher/ClassesTab";
 import { HistoryTab } from "@/components/teacher/HistoryTab";
 import { LessonTab } from "@/components/teacher/LessonTab";
 import { QuizzesTab } from "@/components/teacher/QuizzesTab";
@@ -56,13 +57,14 @@ function TeacherPage() {
       subtitle="Lance pontos, acompanhe o extrato e crie perguntas para a turma."
     >
       <Confetti fire={fire} />
-      <Tabs defaultValue="chamada">
-        <TabsList className="mb-5 grid w-full grid-cols-5">
-          <TabsTrigger value="chamada">Chamada</TabsTrigger>
+      <Tabs defaultValue="aula">
+        <TabsList className="mb-5 grid w-full grid-cols-3 sm:grid-cols-6">
           <TabsTrigger value="aula">Aula</TabsTrigger>
-          <TabsTrigger value="extrato">Extrato</TabsTrigger>
+          <TabsTrigger value="chamada">Chamada</TabsTrigger>
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
+          <TabsTrigger value="extrato">Extrato</TabsTrigger>
           <TabsTrigger value="regras">Regras</TabsTrigger>
+          <TabsTrigger value="salas">Salas</TabsTrigger>
         </TabsList>
         <TabsContent value="chamada">
           <AttendanceTab
@@ -94,6 +96,14 @@ function TeacherPage() {
         </TabsContent>
         <TabsContent value="regras">
           <RulesTab />
+        </TabsContent>
+        <TabsContent value="salas">
+          <ClassesTab
+            classId={classId}
+            onClassChange={selectClass}
+            term={term}
+            onTermChange={setTerm}
+          />
         </TabsContent>
       </Tabs>
     </AppShell>

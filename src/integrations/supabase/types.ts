@@ -149,6 +149,7 @@ export type Database = {
           description: string | null;
           id: string;
           lesson_date: string;
+          lesson_number: number | null;
           theme: string;
         };
         Insert: {
@@ -158,6 +159,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           lesson_date: string;
+          lesson_number?: number | null;
           theme: string;
         };
         Update: {
@@ -167,6 +169,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           lesson_date?: string;
+          lesson_number?: number | null;
           theme?: string;
         };
         Relationships: [];

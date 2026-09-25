@@ -22,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useDeleteLesson, useSaveLesson, type Lesson } from "@/hooks/useLessons";
+import { lessonTag, useDeleteLesson, useSaveLesson, type Lesson } from "@/hooks/useLessons";
 
 function lessonDateLabel(lesson: Lesson) {
   return new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR", {
@@ -63,6 +63,7 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
       {
         id: lesson.id,
         lessonDate: lesson.lesson_date,
+        lessonNumber: lesson.lesson_number,
         theme: theme.trim(),
         description: description.trim(),
       },
@@ -101,6 +102,7 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
                   <BookOpen className="size-3.5" />
                   {lessonDateLabel(lesson)}
                 </DialogDescription>
+                <p className="text-xs font-semibold text-primary">{lessonTag(lesson)}</p>
                 {editing ? (
                   <Input
                     value={theme}
