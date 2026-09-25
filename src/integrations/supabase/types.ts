@@ -141,6 +141,12 @@ export type Database = {
           },
         ];
       };
+      masters: {
+        Row: { user_id: string; created_at: string };
+        Insert: { user_id: string; created_at?: string };
+        Update: { user_id?: string; created_at?: string };
+        Relationships: [];
+      };
       lessons: {
         Row: {
           closed_at: string | null;
@@ -400,6 +406,14 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      is_master: {
+        Args: { _user_id: string };
+        Returns: boolean;
+      };
+      reset_user_password: {
+        Args: { _user_id: string; _new_password: string };
+        Returns: undefined;
+      };
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];

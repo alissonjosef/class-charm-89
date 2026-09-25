@@ -7,6 +7,7 @@ import { Confetti } from "@/components/Feedback";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AttendanceTab } from "@/components/teacher/AttendanceTab";
 import { ClassesTab } from "@/components/teacher/ClassesTab";
+import { UsersTab } from "@/components/teacher/UsersTab";
 import { HistoryTab } from "@/components/teacher/HistoryTab";
 import { LessonTab } from "@/components/teacher/LessonTab";
 import { QuizzesTab } from "@/components/teacher/QuizzesTab";
@@ -58,13 +59,14 @@ function TeacherPage() {
     >
       <Confetti fire={fire} />
       <Tabs defaultValue="aula">
-        <TabsList className="mb-5 grid w-full grid-cols-3 sm:grid-cols-6">
+        <TabsList className="mb-5 grid h-auto w-full grid-cols-4 sm:grid-cols-7">
           <TabsTrigger value="aula">Aula</TabsTrigger>
           <TabsTrigger value="chamada">Chamada</TabsTrigger>
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
           <TabsTrigger value="regras">Regras</TabsTrigger>
           <TabsTrigger value="salas">Salas</TabsTrigger>
+          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
         </TabsList>
         <TabsContent value="chamada">
           <AttendanceTab
@@ -104,6 +106,9 @@ function TeacherPage() {
             term={term}
             onTermChange={setTerm}
           />
+        </TabsContent>
+        <TabsContent value="usuarios">
+          <UsersTab />
         </TabsContent>
       </Tabs>
     </AppShell>

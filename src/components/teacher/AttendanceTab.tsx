@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, Loader2, Lock, Search, Trophy, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Loader2, Lock, QrCode, Search, Trophy, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PointsBurst } from "@/components/Feedback";
 import { EmptyState } from "@/components/States";
+import { QrScannerDialog } from "./QrScannerDialog";
 
 export function AttendanceTab({
   classId,
@@ -49,6 +50,7 @@ export function AttendanceTab({
   const [search, setSearch] = useState("");
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
   const [showRanking, setShowRanking] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   const today = todayInSaoPaulo();
   const month = monthOf(today);
@@ -257,15 +259,36 @@ export function AttendanceTab({
         ) : null}
       </section>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar aluno"
-          className="pl-9"
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar aluno"
+            className="pl-9"
+          />
+        </div>
+        <Button
+          variant="ink"
+          onClick={() => setScanning(true)}
+          disabled={lessonClosed || !rulesData?.rules.length}
+          title="Fazer chamada lendo o QR code dos alunos"
+        >
+          <QrCode className="size-4" /> Ler QR
+        </Button>
       </div>
+      <QrScannerDialog
+        open={scanning}
+        onOpenChange={setScanning}
+        students={students ?? []}
+        groups={rulesData?.groups ?? []}
+        rules={rulesData?.rules ?? []}
+        appliedToday={appliedToday}
+        onScan={async (student, rule) => {
+          await apply.mutateAsync({ student, rule });
+        }}
+      />
       {lessonClosed && (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
           <Lock className="size-4 shrink-0" />

@@ -18,6 +18,7 @@ import { EmptyState, FullPageLoader } from "@/components/States";
 import { Confetti } from "@/components/Feedback";
 import { QuizRunner } from "@/components/student/QuizRunner";
 import { QuizReview } from "@/components/student/QuizReview";
+import { StudentQrCard } from "@/components/student/StudentQrCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -73,6 +74,9 @@ function StudentPage() {
     <AppShell title={`Olá, ${profile.name.split(" ")[0]}!`} subtitle="Seu progresso na turma.">
       <Confetti fire={fire} />
       <ScoreHero points={termPoints.data ?? 0} term={term} />
+      <div className="mt-3">
+        <StudentQrCard studentId={profile.id} name={profile.name} />
+      </div>
       <Tabs defaultValue="extrato" className="mt-6">
         <TabsList className="mb-5 grid w-full grid-cols-4">
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
