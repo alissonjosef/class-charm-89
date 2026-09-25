@@ -93,7 +93,7 @@ CREATE TRIGGER profiles_protect_master
 BEFORE DELETE ON public.profiles
 FOR EACH ROW WHEN (public.is_master(OLD.id)) EXECUTE FUNCTION public.protect_master();
 
--- 3. Cria o master ebd@ebd.com (senha inicial: dominigo) se ainda não existir.
+-- 3. Cria o master ebd@ebd.com (senha inicial: domingo) se ainda não existir.
 DO $$
 DECLARE
   master_id UUID;
@@ -108,7 +108,7 @@ BEGIN
       confirmation_token, recovery_token, email_change_token_new, email_change, is_sso_user
     ) VALUES (
       '00000000-0000-0000-0000-000000000000', master_id, 'authenticated', 'authenticated',
-      'ebd@ebd.com', extensions.crypt('dominigo', extensions.gen_salt('bf')), now(),
+      'ebd@ebd.com', extensions.crypt('domingo', extensions.gen_salt('bf')), now(),
       '{"provider":"email","providers":["email"]}'::jsonb,
       '{"name":"Master EBD","role":"teacher"}'::jsonb, now(), now(),
       '', '', '', '', false

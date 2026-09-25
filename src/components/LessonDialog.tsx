@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Lock, LockOpen, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { lessonTag, useDeleteLesson, useSaveLesson, type Lesson } from "@/hooks/useLessons";
+import {
+  lessonTag,
+  useCloseLesson,
+  useDeleteLesson,
+  useSaveLesson,
+  type Lesson,
+} from "@/hooks/useLessons";
 
 function lessonDateLabel(lesson: Lesson) {
   return new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR", {
@@ -46,6 +52,20 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
   const [description, setDescription] = useState("");
   const saveLesson = useSaveLesson();
   const deleteLesson = useDeleteLesson();
+  const closeLesson = useCloseLesson();
+  const isClosed = Boolean(lesson?.closed_at);
+
+  function toggleClosed() {
+    if (!lesson) return;
+    closeLesson.mutate(
+      { id: lesson.id, closed: !isClosed },
+      {
+        onSuccess: () => toast.success(isClosed ? "Aula reaberta" : "Aula encerrada"),
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : "Erro ao atualizar a aula"),
+      },
+    );
+  }
 
   useEffect(() => {
     setEditing(false);
@@ -102,7 +122,14 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
                   <BookOpen className="size-3.5" />
                   {lessonDateLabel(lesson)}
                 </DialogDescription>
-                <p className="text-xs font-semibold text-primary">{lessonTag(lesson)}</p>
+                <p className="flex flex-wrap items-center gap-2 text-xs font-semibold text-primary">
+                  {lessonTag(lesson)}
+                  {isClosed && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                      <Lock className="size-3" /> Encerrada
+                    </span>
+                  )}
+                </p>
                 {editing ? (
                   <Input
                     value={theme}
@@ -131,7 +158,7 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
               )}
 
               {canEdit && (
-                <DialogFooter className="gap-2 sm:justify-between">
+                <DialogFooter className="flex-wrap gap-2 sm:justify-between">
                   {editing ? (
                     <>
                       <Button variant="ghost" onClick={() => setEditing(false)}>
@@ -147,10 +174,25 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
                         <Trash2 className="size-4" />
                         Excluir
                       </Button>
-                      <Button onClick={() => setEditing(true)}>
-                        <Pencil className="size-4" />
-                        Editar
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant={isClosed ? "outline" : "ink"}
+                          onClick={toggleClosed}
+                          disabled={closeLesson.isPending}
+                          title={
+                            isClosed
+                              ? "Reabrir para lançar pontos e editar"
+                              : "Com a aula encerrada, a chamada não lança mais pontos"
+                          }
+                        >
+                          {isClosed ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
+                          {isClosed ? "Reabrir aula" : "Encerrar aula"}
+                        </Button>
+                        <Button onClick={() => setEditing(true)} disabled={isClosed}>
+                          <Pencil className="size-4" />
+                          Editar
+                        </Button>
+                      </div>
                     </>
                   )}
                 </DialogFooter>

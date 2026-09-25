@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Loader2,
   Lock,
+  Sparkles,
   Trophy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +27,8 @@ import { levelFor, ruleLabel } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
 import { lessonTag, useLessons } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
+import { VerseDialog } from "@/components/VerseDialog";
+import { currentVerse, useWeeklyVerses, type WeeklyVerse } from "@/hooks/useWeeklyVerses";
 import { QUIZ_COLUMNS, parseQuiz, quizStatus, type Quiz } from "@/lib/types";
 import { currentTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
 
@@ -77,6 +80,7 @@ function StudentPage() {
       <div className="mt-3">
         <StudentQrCard studentId={profile.id} name={profile.name} />
       </div>
+      <WeeklyVerseBanner />
       <Tabs defaultValue="extrato" className="mt-6">
         <TabsList className="mb-5 grid w-full grid-cols-4">
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
@@ -217,8 +221,95 @@ function MyHistory() {
   );
 }
 
+const VERSE_SEEN_KEY = "classe-viva:verse-seen";
+
+/** Versículo da semana: abre sozinho na primeira entrada após a liberação e fica como card no topo. */
+function WeeklyVerseBanner() {
+  const { data: verses } = useWeeklyVerses();
+  const verse = currentVerse(verses);
+  const [open, setOpen] = useState(false);
+  const [auto, setAuto] = useState(false);
+
+  useEffect(() => {
+    if (!verse) return;
+    if (window.localStorage.getItem(VERSE_SEEN_KEY) === verse.id) return;
+    window.localStorage.setItem(VERSE_SEEN_KEY, verse.id);
+    setAuto(true);
+    setOpen(true);
+  }, [verse?.id]);
+
+  if (!verse) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setAuto(false);
+          setOpen(true);
+        }}
+        className="surface mt-3 grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40"
+      >
+        <span className="grid size-10 place-items-center rounded-xl bg-gold/20 text-gold">
+          <Sparkles className="size-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Versículo da semana{verse.theme ? ` · ${verse.theme}` : ""}
+          </span>
+          <span className="block truncate font-display text-base font-semibold">
+            {verse.reference}
+          </span>
+          <span className="line-clamp-1 text-sm text-muted-foreground">{verse.verse_text}</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+      <VerseDialog verse={open ? verse : null} onClose={() => setOpen(false)} highlight={auto} />
+    </>
+  );
+}
+
+function VerseHistory({ verses }: { verses: WeeklyVerse[] }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openVerse = verses.find((v) => v.id === openId) ?? null;
+  if (!verses.length) return null;
+  return (
+    <section className="space-y-2">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Sparkles className="size-3.5 text-gold" /> Versículos da semana
+      </p>
+      <ul className="surface divide-y divide-border">
+        {verses.map((verse) => (
+          <li key={verse.id}>
+            <button
+              type="button"
+              onClick={() => setOpenId(verse.id)}
+              className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 text-left transition hover:bg-accent/40"
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium">
+                  {verse.reference}
+                  {verse.theme ? (
+                    <span className="text-muted-foreground"> · {verse.theme}</span>
+                  ) : null}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {new Date(`${verse.release_date}T00:00:00`).toLocaleDateString("pt-BR")}
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <VerseDialog verse={openVerse} onClose={() => setOpenId(null)} />
+    </section>
+  );
+}
+
 function MyLessons() {
   const { data: lessons, isLoading } = useLessons();
+  const { data: verses } = useWeeklyVerses();
   const today = todayInSaoPaulo();
   const [openId, setOpenId] = useState<string | null>(null);
   const openLesson = lessons?.find((l) => l.id === openId) ?? null;
@@ -233,15 +324,19 @@ function MyLessons() {
 
   if (!lessons?.length) {
     return (
-      <EmptyState
-        title="Nenhuma aula publicada"
-        text="Quando o professor abrir uma aula, o tema e o conteúdo aparecem aqui para você estudar."
-      />
+      <div className="space-y-6">
+        <VerseHistory verses={verses ?? []} />
+        <EmptyState
+          title="Nenhuma aula publicada"
+          text="Quando o professor abrir uma aula, o tema e o conteúdo aparecem aqui para você estudar."
+        />
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="space-y-6">
+      <VerseHistory verses={verses ?? []} />
       <ul className="space-y-3">
         {lessons.map((lesson) => {
           const isToday = lesson.lesson_date === today;
@@ -292,7 +387,7 @@ function MyLessons() {
         })}
       </ul>
       <LessonDialog lesson={openLesson} onClose={() => setOpenId(null)} />
-    </>
+    </div>
   );
 }
 
