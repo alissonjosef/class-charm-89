@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, ChevronRight, Loader2, Lock, Plus } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, Loader2, Lock, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,11 @@ import {
 
 const NO_NUMBER = "none";
 
+function lessonStatus(lesson: Lesson): "agendada" | "aberta" | "concluída" {
+  if (lesson.closed_at) return "concluída";
+  return lesson.lesson_date > todayInSaoPaulo() ? "agendada" : "aberta";
+}
+
 export function LessonTab() {
   const today = todayInSaoPaulo();
   const term = currentTermSaoPaulo();
@@ -47,6 +52,9 @@ export function LessonTab() {
 
   const termLessons = (lessons ?? []).filter((l) => termOfDate(l.lesson_date) === term);
   const todayLesson = (lessons ?? []).find((l) => l.lesson_date === today) ?? null;
+  const scheduled = (lessons ?? [])
+    .filter((l) => l.lesson_date > today)
+    .sort((a, b) => a.lesson_date.localeCompare(b.lesson_date));
 
   if (isLoading) {
     return (
@@ -104,6 +112,19 @@ export function LessonTab() {
 
       <WeeklyVerseCard />
 
+      {scheduled.length ? (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Aulas agendadas
+          </p>
+          <ul className="surface divide-y divide-border overflow-hidden">
+            {scheduled.map((lesson) => (
+              <LessonRow key={lesson.id} lesson={lesson} onOpen={setOpenId} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -135,30 +156,7 @@ export function LessonTab() {
         ) : (
           <ul className="surface divide-y divide-border overflow-hidden">
             {historyLessons.map((lesson) => (
-              <li key={lesson.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(lesson.id)}
-                  className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40"
-                >
-                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary font-display text-xs font-semibold text-secondary-foreground">
-                    {lesson.lesson_number ?? "–"}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                      {lesson.closed_at && (
-                        <Lock className="size-3 shrink-0 text-muted-foreground" />
-                      )}
-                      <span className="truncate">{lesson.theme}</span>
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")}
-                      {lesson.description ? ` · ${lesson.description}` : ""}
-                    </p>
-                  </div>
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                </button>
-              </li>
+              <LessonRow key={lesson.id} lesson={lesson} onOpen={setOpenId} />
             ))}
           </ul>
         )}
@@ -178,6 +176,40 @@ export function LessonTab() {
   );
 }
 
+function LessonRow({ lesson, onOpen }: { lesson: Lesson; onOpen: (id: string) => void }) {
+  const status = lessonStatus(lesson);
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onOpen(lesson.id)}
+        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition hover:bg-accent/40"
+      >
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary font-display text-xs font-semibold text-secondary-foreground">
+          {lesson.lesson_number ?? "–"}
+        </span>
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+            {lesson.closed_at && <Lock className="size-3 shrink-0 text-muted-foreground" />}
+            <span className="truncate">{lesson.theme}</span>
+            {status === "agendada" && (
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                Agendada
+              </span>
+            )}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            {new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")} ·{" "}
+            {termLabel(termOfDate(lesson.lesson_date))}
+            {lesson.description ? ` · ${lesson.description}` : ""}
+          </p>
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+    </li>
+  );
+}
+
 /** Montado só enquanto aberto: cada "Nova aula" começa com o formulário limpo. */
 function NewLessonDialog({
   initialNumber,
@@ -192,7 +224,8 @@ function NewLessonDialog({
   const [date, setDate] = useState(todayInSaoPaulo());
   const term = termOfDate(date);
   const termLessons = lessons.filter((l) => termOfDate(l.lesson_date) === term);
-  const doneNumbers = new Set(termLessons.map((l) => l.lesson_number));
+  const byNumber = new Map(termLessons.map((l) => [l.lesson_number, l] as const));
+  const doneNumbers = new Set(byNumber.keys());
   const suggested =
     initialNumber ??
     Array.from({ length: LESSONS_PER_TERM }, (_, i) => i + 1).find((n) => !doneNumbers.has(n)) ??
@@ -264,7 +297,7 @@ function NewLessonDialog({
                 {Array.from({ length: LESSONS_PER_TERM }, (_, i) => i + 1).map((n) => (
                   <SelectItem key={n} value={String(n)}>
                     Lição {n}
-                    {doneNumbers.has(n) ? " · concluída" : ""}
+                    {byNumber.has(n) ? ` · ${lessonStatus(byNumber.get(n)!)}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -354,6 +387,7 @@ function TermBox({
         {Array.from({ length: LESSONS_PER_TERM }, (_, i) => i + 1).map((n) => {
           const lesson = byNumber.get(n);
           const isToday = lesson?.id === todayLessonId;
+          const status = lesson ? lessonStatus(lesson) : null;
           return (
             <button
               key={n}
@@ -361,25 +395,31 @@ function TermBox({
               onClick={() => (lesson ? onOpen(lesson.id) : onCreate(n))}
               title={
                 lesson
-                  ? `Lição ${n} · ${lesson.theme}${lesson.closed_at ? " (encerrada)" : ""}`
+                  ? `Lição ${n} · ${lesson.theme} (aula ${status})`
                   : `Lição ${n} · toque para abrir esta aula`
               }
               className={`relative grid aspect-square place-items-center rounded-xl font-display text-sm font-semibold transition ${
-                lesson
-                  ? "bg-ink text-ink-foreground shadow-soft hover:bg-ink/85"
-                  : "border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
+                status === "agendada"
+                  ? "border-2 border-primary/60 bg-primary/10 text-primary hover:bg-primary/20"
+                  : lesson
+                    ? "bg-ink text-ink-foreground shadow-soft hover:bg-ink/85"
+                    : "border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
               } ${isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
             >
               {n}
               {lesson?.closed_at && (
                 <Lock className="absolute right-0.5 top-0.5 size-2.5 opacity-70" />
               )}
+              {status === "agendada" && (
+                <CalendarClock className="absolute right-0.5 top-0.5 size-2.5 opacity-80" />
+              )}
             </button>
           );
         })}
       </div>
       <p className="text-xs text-muted-foreground">
-        Toque numa lição concluída para ver, encerrar ou reabrir; numa vazia para abrir a aula.
+        Escura: aula aberta · cadeado: concluída · clara com relógio: agendada. Toque para ver ou
+        editar; numa vazia para abrir a aula.
       </p>
     </section>
   );
