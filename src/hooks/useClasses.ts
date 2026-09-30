@@ -107,11 +107,8 @@ export function useAuthorizeTeacher(classId: string | null) {
         if (error) throw error;
         return;
       }
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert({ user_id: userId, role: "teacher" });
-      // 23505: já era professor
-      if (roleError && roleError.code !== "23505") throw roleError;
+      const { error: roleError } = await supabase.rpc("promote_to_teacher", { _user_id: userId });
+      if (roleError) throw roleError;
       const { error } = await supabase
         .from("class_teachers")
         .insert({ class_id: classId!, teacher_id: userId, added_by: session!.user.id });
@@ -120,6 +117,9 @@ export function useAuthorizeTeacher(classId: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["class-teachers", classId] });
       queryClient.invalidateQueries({ queryKey: ["people"] });
+      queryClient.invalidateQueries({ queryKey: ["everyone"] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["class-members"] });
     },
   });
 }
