@@ -11,7 +11,7 @@ import {
   useRenameClass,
   useToggleClassMember,
 } from "@/hooks/useClasses";
-import { useStudents } from "@/hooks/useStudents";
+import { usePeople } from "@/hooks/useStudents";
 import { currentTerm, recentTerms, termLabel } from "@/lib/terms";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -297,21 +297,28 @@ function PersonRow({
   email,
   checked,
   disabled,
+  badge,
   onToggle,
 }: {
   name: string;
   email: string;
   checked: boolean;
   disabled: boolean;
+  badge?: string | undefined;
   onToggle: () => void;
 }) {
   return (
     <label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-secondary/50">
       <Checkbox checked={checked} disabled={disabled} onCheckedChange={onToggle} />
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{name}</span>
         <span className="block truncate text-xs text-muted-foreground">{email}</span>
       </span>
+      {badge ? (
+        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+          {badge}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -325,11 +332,12 @@ function MembersDialog({
   open: boolean;
   onOpenChange: (value: boolean) => void;
 }) {
-  const { data: students } = useStudents();
+  const { data: people } = usePeople();
   const { data: members } = useClassMembers(classId);
   const toggle = useToggleClassMember(classId);
   const [search, setSearch] = useState("");
-  const visible = (students ?? []).filter((s) => matches(s, search));
+  const students = (people ?? []).filter((p) => !p.isTeacher);
+  const visible = students.filter((s) => matches(s, search));
 
   return (
     <PeopleDialog
@@ -368,7 +376,7 @@ function MembersDialog({
       })}
       {!visible.length ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          {students?.length ? "Nenhum aluno encontrado." : "Nenhum aluno cadastrado ainda."}
+          {students.length ? "Nenhum aluno encontrado." : "Nenhum aluno cadastrado ainda."}
         </p>
       ) : null}
     </PeopleDialog>
@@ -384,11 +392,12 @@ function TeachersDialog({
   open: boolean;
   onOpenChange: (value: boolean) => void;
 }) {
-  const { data: students } = useStudents();
+  const { data: people } = usePeople();
   const { data: teachers } = useClassTeachers(classId);
   const authorize = useAuthorizeTeacher(classId);
   const [search, setSearch] = useState("");
-  const visible = (students ?? []).filter((s) => matches(s, search));
+  const candidates = (people ?? []).filter((p) => !p.isMaster);
+  const visible = candidates.filter((s) => matches(s, search));
 
   return (
     <PeopleDialog
@@ -398,7 +407,7 @@ function TeachersDialog({
         onOpenChange(value);
       }}
       title="Delegar professor"
-      description="Ao marcar, o aluno vira professor e passa a gerenciar somente esta sala."
+      description="Marque quem dá aula nesta sala. Um aluno marcado vira professor; desmarcar tira o acesso a esta sala."
       search={search}
       onSearch={setSearch}
     >
@@ -410,6 +419,7 @@ function TeachersDialog({
             name={person.name}
             email={person.email}
             checked={authorized}
+            badge={person.isTeacher ? "Professor" : undefined}
             disabled={authorize.isPending}
             onToggle={() =>
               authorize.mutate(
@@ -429,7 +439,7 @@ function TeachersDialog({
       })}
       {!visible.length ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          {students?.length ? "Ninguém encontrado." : "Nenhuma pessoa cadastrada ainda."}
+          {candidates.length ? "Ninguém encontrado." : "Nenhuma pessoa cadastrada ainda."}
         </p>
       ) : null}
     </PeopleDialog>
