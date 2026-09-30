@@ -30,7 +30,14 @@ import { LessonDialog } from "@/components/LessonDialog";
 import { VerseDialog } from "@/components/VerseDialog";
 import { currentVerse, useWeeklyVerses, type WeeklyVerse } from "@/hooks/useWeeklyVerses";
 import { QUIZ_COLUMNS, parseQuiz, quizStatus, type Quiz } from "@/lib/types";
-import { currentTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
+import { currentTerm, isVisibleTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/aluno")({
   head: () => ({
@@ -149,20 +156,64 @@ type MyEntry = {
 function MyHistory() {
   const { session } = useAuth();
   const { data: rules } = useRules();
+  const current = currentTerm();
+  const [term, setTerm] = useState(current);
+  const { data: myTerms } = useQuery({
+    queryKey: ["my-terms", session?.user.id],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase
+        .from("points_history")
+        .select("term")
+        .eq("student_id", session!.user.id);
+      if (error) throw error;
+      return Array.from(new Set([current, ...(data ?? []).map((row) => row.term)]))
+        .filter(isVisibleTerm)
+        .sort((a, b) => b.localeCompare(a));
+    },
+  });
   const { data, isLoading } = useQuery({
-    queryKey: ["my-history", session?.user.id, currentTerm()],
+    queryKey: ["my-history", session?.user.id, term],
     queryFn: async (): Promise<MyEntry[]> => {
       const { data, error } = await supabase
         .from("points_history")
         .select("id, type, points, note, created_at, lessons(lesson_number, lesson_date, theme)")
         .eq("student_id", session!.user.id)
-        .eq("term", currentTerm())
+        .eq("term", term)
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
       return (data ?? []) as MyEntry[];
     },
   });
+  const total = (data ?? []).reduce((sum, row) => sum + row.points, 0);
+
+  const termPicker = (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <Select value={term} onValueChange={setTerm}>
+        <SelectTrigger className="h-8 w-full text-xs sm:w-56">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(myTerms ?? [current]).map((value) => (
+            <SelectItem key={value} value={value}>
+              {termLabel(value)}
+              {value === current ? " (atual)" : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {data?.length ? (
+        <p className="text-xs text-muted-foreground">
+          Saldo do trimestre:{" "}
+          <span
+            className={`font-display text-sm font-bold ${total >= 0 ? "text-success" : "text-destructive"}`}
+          >
+            {total}
+          </span>
+        </p>
+      ) : null}
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -174,50 +225,56 @@ function MyHistory() {
 
   if (!data?.length) {
     return (
-      <EmptyState
-        title="Seu extrato está vazio"
-        text="Assim que o professor lançar pontos ou você responder um quiz, tudo aparece aqui detalhado."
-      />
+      <>
+        {termPicker}
+        <EmptyState
+          title={term === current ? "Seu extrato está vazio" : "Sem pontos neste trimestre"}
+          text="Assim que o professor lançar pontos ou você responder um quiz, tudo aparece aqui detalhado."
+        />
+      </>
     );
   }
 
   return (
-    <ul className="surface divide-y divide-border overflow-hidden">
-      {data.map((row) => (
-        <li key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">
-              {row.note ?? ruleLabel(row.type, rules?.rules)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {ruleLabel(row.type, rules?.rules)} ·{" "}
-              {new Date(row.created_at).toLocaleString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-            {row.lessons ? (
-              <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                <BookOpen className="size-3 shrink-0" />
-                <span className="truncate">
-                  {lessonTag(row.lessons)} · {row.lessons.theme}
-                </span>
+    <>
+      {termPicker}
+      <ul className="surface divide-y divide-border overflow-hidden">
+        {data.map((row) => (
+          <li key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">
+                {row.note ?? ruleLabel(row.type, rules?.rules)}
               </p>
-            ) : null}
-          </div>
-          <span
-            className={`shrink-0 font-display text-base font-bold ${
-              row.points >= 0 ? "text-success" : "text-destructive"
-            }`}
-          >
-            {row.points > 0 ? "+" : ""}
-            {row.points}
-          </span>
-        </li>
-      ))}
-    </ul>
+              <p className="text-xs text-muted-foreground">
+                {ruleLabel(row.type, rules?.rules)} ·{" "}
+                {new Date(row.created_at).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
+              {row.lessons ? (
+                <p className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  <BookOpen className="size-3 shrink-0" />
+                  <span className="truncate">
+                    {lessonTag(row.lessons)} · {row.lessons.theme}
+                  </span>
+                </p>
+              ) : null}
+            </div>
+            <span
+              className={`shrink-0 font-display text-base font-bold ${
+                row.points >= 0 ? "text-success" : "text-destructive"
+              }`}
+            >
+              {row.points > 0 ? "+" : ""}
+              {row.points}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

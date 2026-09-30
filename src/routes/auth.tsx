@@ -50,8 +50,16 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+/** "joao da silva" -> "Joao Da Silva" (cada palavra com inicial maiúscula). */
+function capitalizeName(value: string): string {
+  return value.replace(
+    /(^|\s)(\p{L})/gu,
+    (_m, space: string, letter: string) => space + letter.toUpperCase(),
+  );
+}
+
 const schema = z.object({
-  name: z.string().trim().max(80, "Nome muito longo").optional(),
+  name: z.string().trim().max(80, "Nome muito longo").transform(capitalizeName).optional(),
   email: z.string().trim().email("E-mail inválido").max(255),
   password: z.string().min(6, "A senha precisa de pelo menos 6 caracteres").max(72),
 });
@@ -66,6 +74,18 @@ function AuthPage() {
   const { session, role: currentRole, loading } = useAuth();
   const navigate = useNavigate();
   const { data: classes, isLoading: loadingClasses } = useSignupClasses(mode === "signup");
+
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const description = hash.get("error_description");
+    if (!description) return;
+    toast.error(
+      hash.get("error_code") === "otp_expired"
+        ? "O link de confirmação expirou ou já foi usado. Faça login ou cadastre-se de novo."
+        : description.replace(/\+/g, " "),
+    );
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
 
   useEffect(() => {
     if (session && !loading && currentRole) {
@@ -87,7 +107,7 @@ function AuthPage() {
           email: parsed.data.email,
           password: parsed.data.password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: `${window.location.origin}/auth`,
             data: {
               name: parsed.data.name || parsed.data.email.split("@")[0],
               class_id: classId === NO_CLASS ? null : classId,
@@ -170,7 +190,7 @@ function AuthPage() {
                   <Input
                     id="name"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => setName(capitalizeName(e.target.value))}
                     placeholder="Como aparecerá na lista"
                     maxLength={80}
                   />

@@ -41,7 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("masters").select("user_id").eq("user_id", userId).maybeSingle(),
     ]);
     setProfile((prof as Profile | null) ?? null);
-    const found = roles?.[0]?.role as Role | undefined;
+    const roleList = (roles ?? []).map((r) => r.role as Role);
+    const found = roleList.includes("teacher") ? "teacher" : roleList[0];
     setIsMaster(Boolean(master));
     setRole(master ? "teacher" : (found ?? null));
   }
