@@ -10,7 +10,7 @@ import { useStudents, type Student } from "@/hooks/useStudents";
 import { useTodayLesson } from "@/hooks/useLessons";
 import { monthOf, todayInSaoPaulo } from "@/lib/terms";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
-import { MonthRanking, useMonthRanking } from "./MonthRanking";
+import { useMonthRanking } from "./MonthRanking";
 import { levelFor, type Rule } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,7 @@ export function AttendanceTab({
 
   const today = todayInSaoPaulo();
   const month = monthOf(today);
-  const { ranking, rankOf } = useMonthRanking(students ?? [], month, selectedClass);
+  const { rankOf } = useMonthRanking(students ?? [], month, selectedClass);
   const presenceRule = (rulesData?.rules ?? []).find((r) => r.key === "PRESENCA");
   const { data: todayLesson } = useTodayLesson();
   const lessonClosed = Boolean(todayLesson?.closed_at);
@@ -191,8 +191,6 @@ export function AttendanceTab({
         term={term}
         onTermChange={onTermChange}
       />
-
-      <MonthRanking ranking={ranking} month={month} className={className} />
 
       <div className="flex gap-2">
         <div className="relative flex-1">
