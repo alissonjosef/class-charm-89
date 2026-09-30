@@ -18,6 +18,13 @@ export function termLabel(term: string): string {
 
 export const LESSONS_PER_TERM = 13;
 
+/** Primeiro trimestre exibido nos filtros; trimestres anteriores ficam ocultos. */
+export const FIRST_TERM = "2026-T3";
+
+export function isVisibleTerm(term: string): boolean {
+  return term.localeCompare(FIRST_TERM) >= 0;
+}
+
 /** Trimestre (YYYY-T1 … YYYY-T4) de uma data YYYY-MM-DD, no mesmo formato de `termOf`. */
 export function termOfDate(isoDate: string): string {
   const [year, month] = isoDate.split("-");
@@ -52,10 +59,14 @@ export function recentMonths(count = 12): string[] {
   });
 }
 
-/** Trimestre atual e os anteriores, do mais recente para o mais antigo. */
-export function recentTerms(count = 8): string[] {
+/** Do trimestre atual até `FIRST_TERM`, do mais recente para o mais antigo. */
+export function recentTerms(): string[] {
   const now = new Date();
-  return Array.from({ length: count }, (_, index) =>
-    termOf(new Date(now.getFullYear(), now.getMonth() - index * 3, 1)),
-  );
+  const terms: string[] = [];
+  for (let index = 0; ; index++) {
+    const term = termOf(new Date(now.getFullYear(), now.getMonth() - index * 3, 1));
+    if (!isVisibleTerm(term)) break;
+    terms.push(term);
+  }
+  return terms.length ? terms : [currentTerm()];
 }
