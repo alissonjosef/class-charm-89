@@ -65,7 +65,7 @@ export function WeeklyVerseCard() {
       },
       {
         onSuccess: () => {
-          toast.success(editingId ? "Versículo atualizado" : "Versículo da semana salvo");
+          toast.success(editingId ? "Versículo atualizado" : "Leitura Diária salvo");
           cancelEdit();
         },
         onError: (error) =>
@@ -89,7 +89,7 @@ export function WeeklyVerseCard() {
     <section className="surface space-y-3 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <Sparkles className="size-3.5 text-gold" /> Versículo da semana
+          <Sparkles className="size-3.5 text-gold" /> Leitura Diária
         </p>
         {active && (
           <button

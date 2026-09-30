@@ -1,13 +1,35 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { GraduationCap, Loader2, Sparkles, UserRound } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth, type Role } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const NO_CLASS = "none";
+
+function useSignupClasses(enabled: boolean) {
+  return useQuery({
+    queryKey: ["signup-classes"],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("signup_classes");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -36,13 +58,14 @@ const schema = z.object({
 
 function AuthPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [role, setRole] = useState<Role>("student");
+  const [classId, setClassId] = useState(NO_CLASS);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const { session, role: currentRole, loading } = useAuth();
   const navigate = useNavigate();
+  const { data: classes, isLoading: loadingClasses } = useSignupClasses(mode === "signup");
 
   useEffect(() => {
     if (session && !loading && currentRole) {
@@ -65,7 +88,10 @@ function AuthPage() {
           password: parsed.data.password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { name: parsed.data.name || parsed.data.email.split("@")[0], role },
+            data: {
+              name: parsed.data.name || parsed.data.email.split("@")[0],
+              class_id: classId === NO_CLASS ? null : classId,
+            },
           },
         });
         if (error) throw error;
@@ -128,41 +154,17 @@ function AuthPage() {
             </span>
           </div>
           <h1 className="text-2xl font-semibold">
-            {mode === "login" ? "Entrar na turma" : "Criar sua conta"}
+            {mode === "login" ? "Login" : "Criar sua conta"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "login"
               ? "Use seu e-mail e senha para continuar."
-              : "Escolha seu perfil e comece a pontuar."}
+              : "Informe seu nome, escolha sua sala e comece a pontuar."}
           </p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">
             {mode === "signup" ? (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  {(
-                    [
-                      { value: "student", label: "Aluno", icon: UserRound },
-                      { value: "teacher", label: "Professor", icon: GraduationCap },
-                    ] as const
-                  ).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setRole(option.value)}
-                      className={`flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all ${
-                        role === option.value
-                          ? "border-primary bg-accent shadow-soft"
-                          : "border-border bg-card hover:border-primary/40"
-                      }`}
-                    >
-                      <option.icon
-                        className={`size-5 ${role === option.value ? "text-primary" : "text-muted-foreground"}`}
-                      />
-                      <span className="text-sm font-medium">{option.label}</span>
-                    </button>
-                  ))}
-                </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="name">Nome completo</Label>
                   <Input
@@ -172,6 +174,25 @@ function AuthPage() {
                     placeholder="Como aparecerá na lista"
                     maxLength={80}
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="class">Sala</Label>
+                  <Select value={classId} onValueChange={setClassId} disabled={loadingClasses}>
+                    <SelectTrigger id="class">
+                      <SelectValue placeholder="Escolha sua sala" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_CLASS}>Ainda não sei / definir depois</SelectItem>
+                      {(classes ?? []).map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          {room.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Toda conta nova é de aluno. O professor pode te promover depois.
+                  </p>
                 </div>
               </>
             ) : null}

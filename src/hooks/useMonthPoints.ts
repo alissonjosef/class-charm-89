@@ -10,17 +10,19 @@ export function monthRange(month: string): { start: string; end: string } {
   return { start: `${month}-01`, end: `${month}-${String(last).padStart(2, "0")}` };
 }
 
-/** Positivos, negativos e saldo por aluno no mês, considerando todas as salas. */
-export function useMonthPoints(month: string) {
+/** Positivos, negativos e saldo por aluno no mês; com `classId`, só os pontos lançados naquela sala. */
+export function useMonthPoints(month: string, classId: string | null = null) {
   return useQuery({
-    queryKey: ["month-points", month],
+    queryKey: ["month-points", month, classId],
     queryFn: async (): Promise<Record<string, MonthTotals>> => {
       const { start, end } = monthRange(month);
-      const { data, error } = await supabase
+      let query = supabase
         .from("points_history")
         .select("student_id, points")
         .gte("entry_date", start)
         .lte("entry_date", end);
+      if (classId) query = query.eq("class_id", classId);
+      const { data, error } = await query;
       if (error) throw error;
       const totals: Record<string, MonthTotals> = {};
       for (const row of data ?? []) {

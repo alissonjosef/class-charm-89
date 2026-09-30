@@ -223,7 +223,7 @@ function MyHistory() {
 
 const VERSE_SEEN_KEY = "classe-viva:verse-seen";
 
-/** Versículo da semana: abre sozinho na primeira entrada após a liberação e fica como card no topo. */
+/** Leitura Diária: abre sozinho na primeira entrada após a liberação e fica como card no topo. */
 function WeeklyVerseBanner() {
   const { data: verses } = useWeeklyVerses();
   const verse = currentVerse(verses);
@@ -255,7 +255,7 @@ function WeeklyVerseBanner() {
         </span>
         <span className="min-w-0">
           <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Versículo da semana{verse.theme ? ` · ${verse.theme}` : ""}
+            Leitura Diária{verse.theme ? ` · ${verse.theme}` : ""}
           </span>
           <span className="block truncate font-display text-base font-semibold">
             {verse.reference}
@@ -276,7 +276,7 @@ function VerseHistory({ verses }: { verses: WeeklyVerse[] }) {
   return (
     <section className="space-y-2">
       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        <Sparkles className="size-3.5 text-gold" /> Versículos da semana
+        <Sparkles className="size-3.5 text-gold" /> Leitura Diária
       </p>
       <ul className="surface divide-y divide-border">
         {verses.map((verse) => (
