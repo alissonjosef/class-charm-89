@@ -407,7 +407,7 @@ function TeachersDialog({
         onOpenChange(value);
       }}
       title="Delegar professor"
-      description="Marque quem dá aula nesta sala. Um aluno marcado vira professor; desmarcar tira o acesso a esta sala."
+      description="Marque quem dá aula nesta sala. Um aluno marcado vira professor; desmarcar tira desta sala e, se não sobrar nenhuma, volta a ser aluno."
       search={search}
       onSearch={setSearch}
     >
