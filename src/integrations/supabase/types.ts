@@ -444,6 +444,10 @@ export type Database = {
         Args: { _user_id: string };
         Returns: undefined;
       };
+      revoke_teacher: {
+        Args: { _user_id: string; _class_id: string };
+        Returns: undefined;
+      };
       reset_user_password: {
         Args: { _user_id: string; _new_password: string };
         Returns: undefined;

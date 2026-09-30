@@ -99,11 +99,10 @@ export function useAuthorizeTeacher(classId: string | null) {
   return useMutation({
     mutationFn: async ({ userId, authorized }: { userId: string; authorized: boolean }) => {
       if (authorized) {
-        const { error } = await supabase
-          .from("class_teachers")
-          .delete()
-          .eq("class_id", classId!)
-          .eq("teacher_id", userId);
+        const { error } = await supabase.rpc("revoke_teacher", {
+          _user_id: userId,
+          _class_id: classId!,
+        });
         if (error) throw error;
         return;
       }
