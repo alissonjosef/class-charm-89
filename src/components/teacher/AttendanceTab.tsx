@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, Loader2, Lock, QrCode, Search, Trophy, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Loader2, Lock, QrCode, Search, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useClassMembers } from "@/hooks/useClasses";
+import { useClassMembers, useClasses } from "@/hooks/useClasses";
 import { useTermPoints } from "@/hooks/useTermPoints";
 import { useStudents, type Student } from "@/hooks/useStudents";
 import { useTodayLesson } from "@/hooks/useLessons";
-import { useMonthPoints } from "@/hooks/useMonthPoints";
-import { monthLabel, monthOf, todayInSaoPaulo } from "@/lib/terms";
+import { monthOf, todayInSaoPaulo } from "@/lib/terms";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
+import { MonthRanking, useMonthRanking } from "./MonthRanking";
 import { levelFor, type Rule } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,11 @@ export function AttendanceTab({
   const queryClient = useQueryClient();
   const { data: allStudents, isLoading } = useStudents();
   const { data: rulesData } = useRules();
-  const { data: members } = useClassMembers(classId === ALL_CLASSES ? null : classId);
-  const { data: termPoints } = useTermPoints(term, classId === ALL_CLASSES ? null : classId);
+  const { data: classes } = useClasses();
+  const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const className = (classes ?? []).find((room) => room.id === classId)?.name ?? null;
+  const { data: members } = useClassMembers(selectedClass);
+  const { data: termPoints } = useTermPoints(term, selectedClass);
   const pointsOf = (studentId: string) => termPoints?.[studentId] ?? 0;
   const students = (
     classId === ALL_CLASSES
@@ -49,19 +52,12 @@ export function AttendanceTab({
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
-  const [showRanking, setShowRanking] = useState(false);
   const [scanning, setScanning] = useState(false);
 
   const today = todayInSaoPaulo();
   const month = monthOf(today);
-  const { data: monthPoints } = useMonthPoints(month);
-  const ranking = (allStudents ?? [])
-    .map((student) => ({
-      student,
-      totals: monthPoints?.[student.id] ?? { positive: 0, negative: 0, net: 0 },
-    }))
-    .sort((a, b) => b.totals.net - a.totals.net);
-  const rankOf = new Map(ranking.map((row, index) => [row.student.id, index + 1]));
+  const { ranking, rankOf } = useMonthRanking(students ?? [], month, selectedClass);
+  const presenceRule = (rulesData?.rules ?? []).find((r) => r.key === "PRESENCA");
   const { data: todayLesson } = useTodayLesson();
   const lessonClosed = Boolean(todayLesson?.closed_at);
   const studentIds = (students ?? []).map((s) => s.id);
@@ -179,7 +175,7 @@ export function AttendanceTab({
           }
           text={
             classId === ALL_CLASSES
-              ? "Peça para os alunos criarem a conta escolhendo o perfil “Aluno”. Eles aparecerão aqui automaticamente."
+              ? "Peça para os alunos criarem a conta escolhendo a sala. Eles aparecerão aqui automaticamente."
               : "Na aba “Salas”, use “Alunos” para escolher quem faz parte desta turma."
           }
         />
@@ -196,68 +192,7 @@ export function AttendanceTab({
         onTermChange={onTermChange}
       />
 
-      <section className="surface overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowRanking((v) => !v)}
-          aria-expanded={showRanking}
-          className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4 text-left"
-        >
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gold text-gold-foreground">
-            <Trophy className="size-4" />
-          </span>
-          <span className="min-w-0">
-            <span className="block font-display text-sm font-semibold">
-              Destaque do mês · {monthLabel(month)}
-            </span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {ranking[0] && ranking[0].totals.net > 0
-                ? `1º ${ranking[0].student.name} · ${ranking[0].totals.net} pontos`
-                : "Ranking geral de todas as salas, pelo saldo do mês"}
-            </span>
-          </span>
-          <ChevronDown
-            className={`size-4 text-muted-foreground transition-transform ${showRanking ? "rotate-180" : ""}`}
-          />
-        </button>
-        {showRanking ? (
-          <ol className="animate-pop-in divide-y divide-border border-t border-border">
-            {ranking.map(({ student, totals }, index) => (
-              <li
-                key={student.id}
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5"
-              >
-                <span
-                  className={`grid size-8 shrink-0 place-items-center rounded-lg font-display text-xs font-bold ${
-                    index === 0
-                      ? "bg-gold text-gold-foreground"
-                      : index < 3
-                        ? "bg-ink text-ink-foreground"
-                        : "bg-secondary text-secondary-foreground"
-                  }`}
-                >
-                  {index + 1}º
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{student.name}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    <span className="text-success">+{totals.positive}</span>
-                    {totals.negative ? (
-                      <>
-                        {" − "}
-                        <span className="text-destructive">{Math.abs(totals.negative)}</span>
-                      </>
-                    ) : null}
-                    {" = "}
-                    saldo
-                  </span>
-                </span>
-                <span className="font-display text-sm font-bold">{totals.net}</span>
-              </li>
-            ))}
-          </ol>
-        ) : null}
-      </section>
+      <MonthRanking ranking={ranking} month={month} className={className} />
 
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -272,8 +207,8 @@ export function AttendanceTab({
         <Button
           variant="ink"
           onClick={() => setScanning(true)}
-          disabled={lessonClosed || !rulesData?.rules.length}
-          title="Fazer chamada lendo o QR code dos alunos"
+          disabled={lessonClosed || !presenceRule}
+          title="Marcar presença lendo o QR code dos alunos"
         >
           <QrCode className="size-4" /> Ler QR
         </Button>
@@ -282,8 +217,7 @@ export function AttendanceTab({
         open={scanning}
         onOpenChange={setScanning}
         students={students ?? []}
-        groups={rulesData?.groups ?? []}
-        rules={rulesData?.rules ?? []}
+        rule={presenceRule}
         appliedToday={appliedToday}
         onScan={async (student, rule) => {
           await apply.mutateAsync({ student, rule });
@@ -310,7 +244,7 @@ export function AttendanceTab({
             >
               <div className="flex min-w-0 items-center gap-3">
                 <span
-                  title={`${rank}º no ranking do mês (todas as salas)`}
+                  title={`${rank}º no ranking do mês (${className ?? "todas as salas"})`}
                   className={`grid size-10 shrink-0 place-items-center rounded-xl font-display text-sm font-semibold ${
                     rank === 1
                       ? "bg-gold text-gold-foreground"

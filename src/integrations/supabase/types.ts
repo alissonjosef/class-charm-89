@@ -444,6 +444,10 @@ export type Database = {
         Args: { _user_id: string; _new_password: string };
         Returns: undefined;
       };
+      signup_classes: {
+        Args: Record<PropertyKey, never>;
+        Returns: { id: string; name: string }[];
+      };
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];

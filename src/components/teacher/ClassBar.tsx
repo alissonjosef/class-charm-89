@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Pencil, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
+import { Loader2, Pencil, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAuthorizeTeacher,
@@ -146,7 +146,7 @@ export function ClassBar({
           </Button>
           <Button variant="soft" size="sm" disabled={!single} onClick={() => setDialog("teachers")}>
             <ShieldCheck className="size-4" />
-            Professores
+            Delegar professor
           </Button>
           <Button
             variant="softDanger"
@@ -252,12 +252,16 @@ function PeopleDialog({
   onOpenChange,
   title,
   description,
+  search,
+  onSearch,
   children,
 }: {
   open: boolean;
   onOpenChange: (value: boolean) => void;
   title: string;
   description: string;
+  search: string;
+  onSearch: (value: string) => void;
   children: React.ReactNode;
 }) {
   return (
@@ -267,10 +271,25 @@ function PeopleDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="Buscar por nome ou e-mail"
+            className="pl-9"
+            autoFocus
+          />
+        </div>
         <div className="max-h-80 space-y-1 overflow-y-auto">{children}</div>
       </DialogContent>
     </Dialog>
   );
+}
+
+function matches(person: { name: string; email: string }, search: string) {
+  const q = search.trim().toLowerCase();
+  return !q || person.name.toLowerCase().includes(q) || person.email.toLowerCase().includes(q);
 }
 
 function PersonRow({
@@ -309,15 +328,22 @@ function MembersDialog({
   const { data: students } = useStudents();
   const { data: members } = useClassMembers(classId);
   const toggle = useToggleClassMember(classId);
+  const [search, setSearch] = useState("");
+  const visible = (students ?? []).filter((s) => matches(s, search));
 
   return (
     <PeopleDialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(value) => {
+        if (!value) setSearch("");
+        onOpenChange(value);
+      }}
       title="Alunos da sala"
       description="Marque quem faz parte desta sala. Só os marcados aparecem na chamada e no extrato dela."
+      search={search}
+      onSearch={setSearch}
     >
-      {(students ?? []).map((student) => {
+      {visible.map((student) => {
         const isMember = (members ?? []).includes(student.id);
         return (
           <PersonRow
@@ -340,9 +366,9 @@ function MembersDialog({
           />
         );
       })}
-      {!students?.length ? (
+      {!visible.length ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          Nenhum aluno cadastrado ainda.
+          {students?.length ? "Nenhum aluno encontrado." : "Nenhum aluno cadastrado ainda."}
         </p>
       ) : null}
     </PeopleDialog>
@@ -361,15 +387,22 @@ function TeachersDialog({
   const { data: students } = useStudents();
   const { data: teachers } = useClassTeachers(classId);
   const authorize = useAuthorizeTeacher(classId);
+  const [search, setSearch] = useState("");
+  const visible = (students ?? []).filter((s) => matches(s, search));
 
   return (
     <PeopleDialog
       open={open}
-      onOpenChange={onOpenChange}
-      title="Professores da sala"
-      description="Ao marcar, a pessoa vira professor e passa a gerenciar somente esta sala."
+      onOpenChange={(value) => {
+        if (!value) setSearch("");
+        onOpenChange(value);
+      }}
+      title="Delegar professor"
+      description="Ao marcar, o aluno vira professor e passa a gerenciar somente esta sala."
+      search={search}
+      onSearch={setSearch}
     >
-      {(students ?? []).map((person) => {
+      {visible.map((person) => {
         const authorized = (teachers ?? []).includes(person.id);
         return (
           <PersonRow
@@ -394,9 +427,9 @@ function TeachersDialog({
           />
         );
       })}
-      {!students?.length ? (
+      {!visible.length ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          Nenhuma pessoa cadastrada ainda.
+          {students?.length ? "Ninguém encontrado." : "Nenhuma pessoa cadastrada ainda."}
         </p>
       ) : null}
     </PeopleDialog>

@@ -10,6 +10,7 @@ import {
   Send,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -615,6 +616,27 @@ function QuizForm({
                   }
                   placeholder={`Alternativa ${String.fromCharCode(65 + optionIndex)}`}
                 />
+                {question.options.length > 2 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label="Remover alternativa"
+                    onClick={() => {
+                      const options = question.options.filter((_, i) => i !== optionIndex);
+                      const correctOption =
+                        question.correctOption === optionIndex
+                          ? 0
+                          : question.correctOption > optionIndex
+                            ? question.correctOption - 1
+                            : question.correctOption;
+                      update(question.id, { options, correctOption });
+                    }}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                ) : null}
               </div>
             ))}
           </div>

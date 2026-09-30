@@ -76,8 +76,8 @@ export function UsersTab() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Redefina a senha de alunos ou de outros professores quando esquecerem. A pessoa entra com a
-        nova senha na próxima vez.
+        Só o usuário master redefine senhas de alunos e professores. A pessoa entra com a nova senha
+        na próxima vez.
       </p>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -136,7 +136,7 @@ function PeopleList({
       </p>
       <ul className="surface divide-y divide-border overflow-hidden">
         {people.map((person) => {
-          const locked = person.isMaster && !callerIsMaster;
+          const locked = !callerIsMaster;
           return (
             <li
               key={person.id}
@@ -177,7 +177,7 @@ function PeopleList({
                 size="sm"
                 variant="outline"
                 disabled={locked}
-                title={locked ? "Só o master pode trocar a própria senha" : undefined}
+                title={locked ? "Só o usuário master pode redefinir senhas" : undefined}
                 onClick={() => onReset(person)}
               >
                 <KeyRound className="size-3.5" /> Redefinir senha

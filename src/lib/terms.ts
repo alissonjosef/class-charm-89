@@ -16,21 +16,17 @@ export function termLabel(term: string): string {
   return `${quarter}º trimestre de ${year}`;
 }
 
-export const LESSONS_PER_SEMESTER = 13;
+export const LESSONS_PER_TERM = 13;
 
-/** Semestre (YYYY-S1 / YYYY-S2) de uma data YYYY-MM-DD. */
-export function semesterOf(isoDate: string): string {
+/** Trimestre (YYYY-T1 … YYYY-T4) de uma data YYYY-MM-DD, no mesmo formato de `termOf`. */
+export function termOfDate(isoDate: string): string {
   const [year, month] = isoDate.split("-");
-  return `${year}-S${Number(month) <= 6 ? 1 : 2}`;
+  return `${year}-T${Math.floor((Number(month) - 1) / 3) + 1}`;
 }
 
-export function currentSemester(): string {
-  return semesterOf(todayInSaoPaulo());
-}
-
-export function semesterLabel(semester: string): string {
-  const [year, half] = semester.split("-S");
-  return `${half}º semestre de ${year}`;
+/** Trimestre de hoje no fuso de São Paulo. */
+export function currentTermSaoPaulo(): string {
+  return termOfDate(todayInSaoPaulo());
 }
 
 /** Mês (YYYY-MM) de uma data YYYY-MM-DD. */

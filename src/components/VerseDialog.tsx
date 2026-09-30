@@ -12,7 +12,7 @@ import { verseDateLabel, type WeeklyVerse } from "@/hooks/useWeeklyVerses";
 type Props = {
   verse: WeeklyVerse | null;
   onClose: () => void;
-  /** Destaque "Versículo da semana" (abertura automática ao entrar). */
+  /** Destaque "Leitura Diária" (abertura automática ao entrar). */
   highlight?: boolean;
 };
 
@@ -25,7 +25,7 @@ export function VerseDialog({ verse, onClose, highlight = false }: Props) {
             <DialogHeader>
               <DialogDescription className="flex items-center gap-2 capitalize">
                 <Sparkles className="size-3.5 text-gold" />
-                {highlight ? "Versículo da semana · " : ""}
+                {highlight ? "Leitura Diária · " : ""}
                 {verseDateLabel(verse.release_date)}
               </DialogDescription>
               {verse.theme && (

@@ -16,11 +16,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useStudents } from "@/hooks/useStudents";
-import { useClasses } from "@/hooks/useClasses";
+import { useClassMembers, useClasses } from "@/hooks/useClasses";
 import { lessonTag, useLessons } from "@/hooks/useLessons";
 import { monthRange } from "@/hooks/useMonthPoints";
-import { currentTerm, monthLabel, recentMonths, recentTerms, termLabel } from "@/lib/terms";
+import {
+  currentTerm,
+  monthLabel,
+  monthOf,
+  recentMonths,
+  recentTerms,
+  termLabel,
+  todayInSaoPaulo,
+} from "@/lib/terms";
 import { ALL_CLASSES } from "./ClassBar";
+import { MonthRanking, useMonthRanking } from "./MonthRanking";
 
 const ALL = "all";
 
@@ -57,6 +66,13 @@ export function HistoryTab({
   const [lessonId, setLessonId] = useState(ALL);
   const [allTerms, setAllTerms] = useState(false);
   const termFilter = allTerms ? ALL : term;
+  const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const { data: members } = useClassMembers(selectedClass);
+  const rankingMonth = month === ALL ? monthOf(todayInSaoPaulo()) : month;
+  const rankingStudents = selectedClass
+    ? (students ?? []).filter((student) => (members ?? []).includes(student.id))
+    : (students ?? []);
+  const { ranking } = useMonthRanking(rankingStudents, rankingMonth, selectedClass);
 
   const { data, isLoading } = useQuery({
     queryKey: ["class-history", classId, termFilter, studentId, month, lessonId],
@@ -113,7 +129,7 @@ export function HistoryTab({
   }
 
   const filters = (
-    <div className="mb-4 space-y-2">
+    <div className="mb-4 space-y-3">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Select value={classId} onValueChange={onClassChange}>
           <SelectTrigger aria-label="Sala">
@@ -214,6 +230,7 @@ export function HistoryTab({
           </Button>
         ) : null}
       </div>
+      <MonthRanking ranking={ranking} month={rankingMonth} className={classNameOf(selectedClass)} />
     </div>
   );
 

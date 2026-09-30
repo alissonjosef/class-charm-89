@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
-import { Camera, CheckCircle2, Loader2, RefreshCw, SwitchCamera } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle2, Loader2, RefreshCw, SwitchCamera } from "lucide-react";
 import { parseStudentQr } from "@/lib/qr";
-import type { Rule, RuleGroup } from "@/lib/points";
+import type { Rule } from "@/lib/points";
 import type { Student } from "@/hooks/useStudents";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,38 +12,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const RESCAN_MS = 4000;
 
-export type ScanResult = { student: Student; rule: Rule; ok: boolean; message: string };
+export type ScanResult = {
+  student: Student;
+  status: "ok" | "duplicate" | "error";
+  message: string;
+};
 
+/** Leitor de QR da chamada: cada leitura lança somente a Presença. */
 export function QrScannerDialog({
   open,
   onOpenChange,
   students,
-  groups,
-  rules,
+  rule,
   appliedToday,
   onScan,
 }: {
   open: boolean;
   onOpenChange: (value: boolean) => void;
   students: Student[];
-  groups: RuleGroup[];
-  rules: Rule[];
+  /** Regra de presença; `undefined` quando ela não existe mais nas Regras. */
+  rule: Rule | undefined;
   appliedToday: Map<string, string>;
   onScan: (student: Student, rule: Rule) => Promise<void>;
 }) {
-  const defaultRule = rules.find((r) => r.key === "PRESENCA") ?? rules.find((r) => r.points > 0);
-  const [ruleId, setRuleId] = useState<string | null>(null);
-  const rule = rules.find((r) => r.id === ruleId) ?? defaultRule;
   const [log, setLog] = useState<ScanResult[]>([]);
   const lastSeen = useRef(new Map<string, number>());
   const busy = useRef(false);
@@ -59,7 +53,7 @@ export function QrScannerDialog({
 
   function pushLog(entry: ScanResult) {
     setLog((prev) => [entry, ...prev].slice(0, 8));
-    if (navigator.vibrate) navigator.vibrate(entry.ok ? 80 : [60, 60, 60]);
+    if (navigator.vibrate) navigator.vibrate(entry.status === "ok" ? 80 : [60, 60, 60]);
   }
 
   async function handle(text: string) {
@@ -75,25 +69,23 @@ export function QrScannerDialog({
     if (!student) {
       pushLog({
         student: { id: studentId, name: "Aluno desconhecido", email: "", total_points: 0 },
-        rule: currentRule,
-        ok: false,
-        message: "Este QR não é de um aluno desta lista",
+        status: "error",
+        message: "Este QR não é de um aluno desta sala",
       });
       return;
     }
     if (appliedToday.has(`${student.id}:${currentRule.key}`)) {
-      pushLog({ student, rule: currentRule, ok: true, message: "já estava marcado hoje" });
+      pushLog({ student, status: "duplicate", message: "Presença já registrada" });
       return;
     }
     busy.current = true;
     try {
       await onScan(student, currentRule);
-      pushLog({ student, rule: currentRule, ok: true, message: `${currentRule.label} lançada` });
+      pushLog({ student, status: "ok", message: "Presença registrada" });
     } catch (error) {
       pushLog({
         student,
-        rule: currentRule,
-        ok: false,
+        status: "error",
         message: error instanceof Error ? error.message : "Erro ao lançar",
       });
     } finally {
@@ -107,29 +99,18 @@ export function QrScannerDialog({
         <DialogHeader>
           <DialogTitle>Chamada por QR code</DialogTitle>
           <DialogDescription>
-            Aponte a câmera para o QR code do aluno. Cada leitura lança a regra escolhida abaixo.
+            Aponte a câmera para o QR code do aluno. Cada leitura marca a presença
+            {rule ? ` (+${rule.points} pontos)` : ""}.
           </DialogDescription>
         </DialogHeader>
 
-        <Select value={rule?.id ?? ""} onValueChange={setRuleId}>
-          <SelectTrigger aria-label="Regra lançada ao ler o QR">
-            <SelectValue placeholder="Escolha a regra" />
-          </SelectTrigger>
-          <SelectContent>
-            {groups.map((group) => {
-              const groupRules = rules.filter((r) => r.group_id === group.id);
-              if (!groupRules.length) return null;
-              return groupRules.map((r) => (
-                <SelectItem key={r.id} value={r.id}>
-                  {group.name} · {r.label} ({r.points > 0 ? "+" : ""}
-                  {r.points})
-                </SelectItem>
-              ));
-            })}
-          </SelectContent>
-        </Select>
+        {!rule ? (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            A regra “Presença” não existe mais. Cadastre-a na aba Regras para usar o QR.
+          </p>
+        ) : null}
 
-        {open && <CameraScanner onCode={handle} isBusy={() => busy.current} />}
+        {open && rule && <CameraScanner onCode={handle} isBusy={() => busy.current} />}
 
         {log.length ? (
           <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
@@ -137,10 +118,16 @@ export function QrScannerDialog({
               <li
                 key={`${entry.student.id}-${index}`}
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 ${
-                  entry.ok ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                  entry.status === "ok"
+                    ? "bg-success/10 text-success"
+                    : "bg-destructive/10 text-destructive"
                 }`}
               >
-                <CheckCircle2 className="size-4 shrink-0" />
+                {entry.status === "ok" ? (
+                  <CheckCircle2 className="size-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="size-4 shrink-0" />
+                )}
                 <span className="min-w-0 truncate">
                   <strong>{entry.student.name}</strong> · {entry.message}
                 </span>

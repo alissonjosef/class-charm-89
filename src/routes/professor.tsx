@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
+import { useAuth } from "@/hooks/useAuth";
 import { AppShell } from "@/components/AppShell";
 import { FullPageLoader } from "@/components/States";
 import { Confetti } from "@/components/Feedback";
@@ -36,6 +37,7 @@ export const Route = createFileRoute("/professor")({
 
 function TeacherPage() {
   const { ready } = useRoleGuard("teacher");
+  const { isMaster } = useAuth();
   const [fire, setFire] = useState(0);
   const [classId, setClassId] = useState<string>(() =>
     typeof window === "undefined"
@@ -59,14 +61,16 @@ function TeacherPage() {
     >
       <Confetti fire={fire} />
       <Tabs defaultValue="aula">
-        <TabsList className="mb-5 grid h-auto w-full grid-cols-4 sm:grid-cols-7">
+        <TabsList
+          className={`mb-5 grid h-auto w-full grid-cols-3 ${isMaster ? "sm:grid-cols-7" : "sm:grid-cols-6"}`}
+        >
           <TabsTrigger value="aula">Aula</TabsTrigger>
           <TabsTrigger value="chamada">Chamada</TabsTrigger>
           <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
           <TabsTrigger value="regras">Regras</TabsTrigger>
           <TabsTrigger value="salas">Salas</TabsTrigger>
-          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+          {isMaster ? <TabsTrigger value="usuarios">Usuários</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="chamada">
           <AttendanceTab
@@ -107,9 +111,11 @@ function TeacherPage() {
             onTermChange={setTerm}
           />
         </TabsContent>
-        <TabsContent value="usuarios">
-          <UsersTab />
-        </TabsContent>
+        {isMaster ? (
+          <TabsContent value="usuarios">
+            <UsersTab />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </AppShell>
   );
