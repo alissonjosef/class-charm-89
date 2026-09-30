@@ -28,6 +28,7 @@ import {
   LESSONS_PER_TERM,
   currentTermSaoPaulo,
   termLabel,
+  isVisibleTerm,
   termOfDate,
   todayInSaoPaulo,
 } from "@/lib/terms";
@@ -57,7 +58,9 @@ export function LessonTab() {
 
   const terms = Array.from(
     new Set([term, ...(lessons ?? []).map((l) => termOfDate(l.lesson_date))]),
-  ).sort((a, b) => b.localeCompare(a));
+  )
+    .filter(isVisibleTerm)
+    .sort((a, b) => b.localeCompare(a));
   const historyLessons = (lessons ?? []).filter((l) => termOfDate(l.lesson_date) === historyTerm);
 
   return (
