@@ -136,7 +136,7 @@ function PeopleList({
       </p>
       <ul className="surface divide-y divide-border overflow-hidden">
         {people.map((person) => {
-          const locked = !callerIsMaster;
+          const locked = !callerIsMaster || person.isMaster;
           return (
             <li
               key={person.id}
@@ -177,7 +177,13 @@ function PeopleList({
                 size="sm"
                 variant="outline"
                 disabled={locked}
-                title={locked ? "Só o usuário master pode redefinir senhas" : undefined}
+                title={
+                  person.isMaster
+                    ? "A senha do master é fixa e não pode ser alterada"
+                    : locked
+                      ? "Só o usuário master pode redefinir senhas"
+                      : undefined
+                }
                 onClick={() => onReset(person)}
               >
                 <KeyRound className="size-3.5" /> Redefinir senha
