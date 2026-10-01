@@ -79,6 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [session?.user.id]);
 
+  useEffect(() => {
+    const userId = session?.user.id;
+    if (!userId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load(userId);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [session?.user.id]);
+
   const value: AuthState = {
     session,
     profile,
