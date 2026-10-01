@@ -97,14 +97,20 @@ export function useAuthorizeTeacher(classId: string | null) {
   const { session } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, authorized }: { userId: string; authorized: boolean }) => {
+    mutationFn: async ({
+      userId,
+      authorized,
+    }: {
+      userId: string;
+      authorized: boolean;
+    }): Promise<{ demoted: boolean }> => {
       if (authorized) {
-        const { error } = await supabase.rpc("revoke_teacher", {
+        const { data, error } = await supabase.rpc("revoke_teacher", {
           _user_id: userId,
           _class_id: classId!,
         });
         if (error) throw error;
-        return;
+        return { demoted: data === true };
       }
       const { error: roleError } = await supabase.rpc("promote_to_teacher", { _user_id: userId });
       if (roleError) throw roleError;
@@ -112,6 +118,7 @@ export function useAuthorizeTeacher(classId: string | null) {
         .from("class_teachers")
         .insert({ class_id: classId!, teacher_id: userId, added_by: session!.user.id });
       if (error) throw error;
+      return { demoted: false };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["class-teachers", classId] });

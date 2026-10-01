@@ -425,8 +425,14 @@ function TeachersDialog({
               authorize.mutate(
                 { userId: person.id, authorized },
                 {
-                  onSuccess: () =>
-                    toast.success(authorized ? "Autorização removida" : "Professor autorizado"),
+                  onSuccess: ({ demoted }) =>
+                    toast.success(
+                      !authorized
+                        ? "Professor autorizado"
+                        : demoted
+                          ? `${person.name} voltou a ser aluno`
+                          : `${person.name} saiu desta sala, mas continua professor em outra`,
+                    ),
                   onError: (error) =>
                     toast.error(
                       error instanceof Error ? error.message : "Não foi possível atualizar",
