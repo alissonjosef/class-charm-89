@@ -10,7 +10,7 @@ import { useStudents, type Student } from "@/hooks/useStudents";
 import { useTodayLesson } from "@/hooks/useLessons";
 import { monthOf, todayInSaoPaulo } from "@/lib/terms";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
-import { useMonthRanking } from "./MonthRanking";
+import { rankLabel, useMonthRanking } from "./MonthRanking";
 import { levelFor, type Rule } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
 import { Button } from "@/components/ui/button";
@@ -231,7 +231,7 @@ export function AttendanceTab({
 
       {filtered.map((student) => {
         const { current } = levelFor(pointsOf(student.id));
-        const rank = rankOf.get(student.id);
+        const rank = rankOf.get(student.id) ?? null;
         const isOpen = open === student.id;
         return (
           <article key={student.id} className="surface overflow-hidden">
@@ -242,14 +242,18 @@ export function AttendanceTab({
             >
               <div className="flex min-w-0 items-center gap-3">
                 <span
-                  title={`${rank}º no ranking do mês (${className ?? "todas as salas"})`}
+                  title={
+                    rank === null
+                      ? `Sem posição no ranking do mês (${className ?? "todas as salas"})`
+                      : `${rank}º no ranking do mês (${className ?? "todas as salas"})`
+                  }
                   className={`grid size-10 shrink-0 place-items-center rounded-xl font-display text-sm font-semibold ${
                     rank === 1
                       ? "bg-gold text-gold-foreground"
                       : "bg-secondary text-secondary-foreground"
                   }`}
                 >
-                  {rank}º
+                  {rankLabel(rank)}
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{student.name}</span>
