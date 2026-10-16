@@ -212,24 +212,35 @@ export type Database = {
       };
       point_groups: {
         Row: {
+          class_id: string | null;
           created_at: string;
           id: string;
           name: string;
           sort_order: number;
         };
         Insert: {
+          class_id?: string | null;
           created_at?: string;
           id?: string;
           name: string;
           sort_order?: number;
         };
         Update: {
+          class_id?: string | null;
           created_at?: string;
           id?: string;
           name?: string;
           sort_order?: number;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "point_groups_class_id_fkey";
+            columns: ["class_id"];
+            isOneToOne: false;
+            referencedRelation: "classes";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       point_rules: {
         Row: {
@@ -450,6 +461,10 @@ export type Database = {
       };
       reset_user_password: {
         Args: { _user_id: string; _new_password: string };
+        Returns: undefined;
+      };
+      copy_default_rules: {
+        Args: { _class_id: string };
         Returns: undefined;
       };
       signup_classes: {

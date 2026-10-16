@@ -1,4 +1,4 @@
-export type RuleGroup = { id: string; name: string; sort_order: number };
+export type RuleGroup = { id: string; name: string; sort_order: number; class_id: string | null };
 
 export type Rule = {
   id: string;

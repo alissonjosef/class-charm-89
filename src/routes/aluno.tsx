@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { levelFor, ruleLabel } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
+import { useClasses } from "@/hooks/useClasses";
 import { lessonTag, useLessons } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
 import { VerseDialog } from "@/components/VerseDialog";
@@ -155,7 +156,7 @@ type MyEntry = {
 
 function MyHistory() {
   const { session } = useAuth();
-  const { data: rules } = useRules();
+  const { data: rules } = useRules(undefined);
   const current = currentTerm();
   const [term, setTerm] = useState(current);
   const { data: myTerms } = useQuery({
@@ -639,7 +640,10 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
 }
 
 function RulesCard() {
-  const { data, isLoading } = useRules();
+  const { data: classes } = useClasses();
+  const [chosen, setChosen] = useState<string | null>(null);
+  const classId = chosen ?? classes?.[0]?.id ?? null;
+  const { data, isLoading } = useRules(classId);
   if (isLoading) {
     return (
       <div className="grid place-items-center py-16">
@@ -649,6 +653,20 @@ function RulesCard() {
   }
   return (
     <div className="space-y-4">
+      {(classes?.length ?? 0) > 1 ? (
+        <Select value={classId ?? ""} onValueChange={setChosen}>
+          <SelectTrigger className="h-8 w-full text-xs sm:w-56">
+            <SelectValue placeholder="Sala" />
+          </SelectTrigger>
+          <SelectContent>
+            {(classes ?? []).map((room) => (
+              <SelectItem key={room.id} value={room.id}>
+                {room.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
       {(data?.groups ?? []).map((group) => (
         <div key={group.id} className="surface overflow-hidden">
           <p className="border-b border-border px-4 py-3 font-display text-sm font-semibold">

@@ -101,7 +101,7 @@ function TeacherPage() {
           />
         </TabsContent>
         <TabsContent value="regras">
-          <RulesTab />
+          <RulesTab classId={classId} onClassChange={selectClass} />
         </TabsContent>
         <TabsContent value="salas">
           <ClassesTab

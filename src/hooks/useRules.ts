@@ -4,20 +4,30 @@ import type { Rule, RuleGroup } from "@/lib/points";
 
 export type RulesData = { groups: RuleGroup[]; rules: Rule[] };
 
-export function useRules() {
+/**
+ * Regras de pontos. `classId` = sala específica; `null` = regras padrão (modelo
+ * das salas novas); `undefined` = todas (para rotular o extrato).
+ */
+export function useRules(classId?: string | null) {
   return useQuery({
-    queryKey: ["point-rules"],
+    queryKey: ["point-rules", classId === undefined ? "all" : (classId ?? "default")],
     queryFn: async (): Promise<RulesData> => {
-      const [groupsRes, rulesRes] = await Promise.all([
-        supabase.from("point_groups").select("id, name, sort_order").order("sort_order"),
-        supabase
-          .from("point_rules")
-          .select("id, group_id, key, label, points, sort_order")
-          .order("sort_order"),
-      ]);
-      if (groupsRes.error) throw groupsRes.error;
-      if (rulesRes.error) throw rulesRes.error;
-      return { groups: groupsRes.data ?? [], rules: rulesRes.data ?? [] };
+      let groupsQuery = supabase.from("point_groups").select("id, name, sort_order, class_id");
+      if (classId === null) groupsQuery = groupsQuery.is("class_id", null);
+      else if (classId !== undefined) groupsQuery = groupsQuery.eq("class_id", classId);
+
+      const { data: groups, error: groupsError } = await groupsQuery.order("sort_order");
+      if (groupsError) throw groupsError;
+      const groupIds = (groups ?? []).map((g) => g.id);
+      if (!groupIds.length) return { groups: [], rules: [] };
+
+      const { data: rules, error: rulesError } = await supabase
+        .from("point_rules")
+        .select("id, group_id, key, label, points, sort_order")
+        .in("group_id", groupIds)
+        .order("sort_order");
+      if (rulesError) throw rulesError;
+      return { groups: groups ?? [], rules: rules ?? [] };
     },
   });
 }
@@ -38,8 +48,18 @@ export function useRuleMutations() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["point-rules"] });
 
   const createGroup = useMutation({
-    mutationFn: async ({ name, sortOrder }: { name: string; sortOrder: number }) => {
-      const { error } = await supabase.from("point_groups").insert({ name, sort_order: sortOrder });
+    mutationFn: async ({
+      name,
+      sortOrder,
+      classId,
+    }: {
+      name: string;
+      sortOrder: number;
+      classId: string | null;
+    }) => {
+      const { error } = await supabase
+        .from("point_groups")
+        .insert({ name, sort_order: sortOrder, class_id: classId });
       if (error) throw error;
     },
     onSuccess: refresh,

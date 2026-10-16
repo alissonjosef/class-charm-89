@@ -6,6 +6,7 @@ import type { Rule, RuleGroup } from "@/lib/points";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/States";
+import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,15 +22,35 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Não foi possível salvar";
 }
 
-export function RulesTab() {
-  const { data, isLoading } = useRules();
+export function RulesTab({
+  classId,
+  onClassChange,
+}: {
+  classId: string;
+  onClassChange: (value: string) => void;
+}) {
+  const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const { data, isLoading } = useRules(selectedClass);
   const { createGroup } = useRuleMutations();
   const [newGroup, setNewGroup] = useState("");
 
+  const bar = (
+    <ClassBar
+      classId={classId}
+      onChange={onClassChange}
+      term=""
+      onTermChange={() => {}}
+      showTerm={false}
+    />
+  );
+
   if (isLoading) {
     return (
-      <div className="grid place-items-center py-16">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      <div>
+        {bar}
+        <div className="grid place-items-center py-16">
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        </div>
       </div>
     );
   }
@@ -44,6 +65,7 @@ export function RulesTab() {
       await createGroup.mutateAsync({
         name,
         sortOrder: Math.max(-1, ...groups.map((g) => g.sort_order)) + 1,
+        classId: selectedClass,
       });
       setNewGroup("");
       toast.success(`Categoria “${name}” criada`);
@@ -54,9 +76,11 @@ export function RulesTab() {
 
   return (
     <div className="space-y-4">
+      {bar}
       <p className="text-sm text-muted-foreground">
-        Estas categorias e regras aparecem na chamada (para lançar pontos) e na aba “Regras” do
-        aluno. Alterar os pontos vale só para os próximos lançamentos.
+        {selectedClass
+          ? "Regras só desta sala: aparecem na chamada e na aba “Regras” dos alunos dela. Alterar os pontos vale só para os próximos lançamentos."
+          : "Regras padrão: são copiadas para cada sala nova. Para mudar as regras de uma sala que já existe, selecione a sala acima."}
       </p>
 
       {groups.length ? (
