@@ -35,9 +35,9 @@ export function AttendanceTab({
   const { session } = useAuth();
   const queryClient = useQueryClient();
   const { data: allStudents, isLoading } = useStudents();
-  const { data: rulesData } = useRules();
   const { data: classes } = useClasses();
   const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const { data: rulesData } = useRules(selectedClass);
   const className = (classes ?? []).find((room) => room.id === classId)?.name ?? null;
   const { data: members } = useClassMembers(selectedClass);
   const { data: termPoints } = useTermPoints(term, selectedClass);

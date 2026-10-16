@@ -58,7 +58,7 @@ export function HistoryTab({
 }) {
   const queryClient = useQueryClient();
   const { data: students } = useStudents();
-  const { data: rules } = useRules();
+  const { data: rules } = useRules(undefined);
   const { data: classes } = useClasses();
   const { data: lessons } = useLessons();
   const [studentId, setStudentId] = useState(ALL);
