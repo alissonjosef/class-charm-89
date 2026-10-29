@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoleGuard } from "@/hooks/useRoleGuard";
 import { useAuth } from "@/hooks/useAuth";
+import { useClasses } from "@/hooks/useClasses";
 import { AppShell } from "@/components/AppShell";
 import { FullPageLoader } from "@/components/States";
 import { Confetti } from "@/components/Feedback";
@@ -38,6 +39,7 @@ export const Route = createFileRoute("/professor")({
 function TeacherPage() {
   const { ready } = useRoleGuard("teacher");
   const { isMaster } = useAuth();
+  const { data: classes } = useClasses();
   const [fire, setFire] = useState(0);
   const [classId, setClassId] = useState<string>(() =>
     typeof window === "undefined"
@@ -46,6 +48,22 @@ function TeacherPage() {
   );
 
   const [term, setTerm] = useState(currentTerm);
+
+  useEffect(() => {
+    if (!classes) return;
+    if (isMaster) {
+      if (
+        classId !== ALL_CLASSES &&
+        !classes.some((room) => room.id === classId)
+      ) {
+        selectClass(ALL_CLASSES);
+      }
+      return;
+    }
+    if (!classes.some((room) => room.id === classId)) {
+      selectClass(classes[0]?.id ?? "");
+    }
+  }, [classes, classId, isMaster]);
 
   function selectClass(value: string) {
     setClassId(value);

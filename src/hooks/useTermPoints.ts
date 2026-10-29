@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 /** Soma de pontos por aluno no trimestre (opcionalmente restrita a uma sala). */
 export function useTermPoints(term: string, classId: string | null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["term-points", term, classId],
+    queryKey: ["term-points", term, classId, session?.user.id],
     queryFn: async (): Promise<Record<string, number>> => {
       let query = supabase.from("points_history").select("student_id, points").eq("term", term);
       if (classId) query = query.eq("class_id", classId);

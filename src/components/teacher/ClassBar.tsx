@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Pencil, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 import {
   useAuthorizeTeacher,
   useClassMembers,
@@ -60,6 +61,7 @@ export function ClassBar({
   manageable?: boolean;
   showTerm?: boolean;
 }) {
+  const { isMaster } = useAuth();
   const { data: classes, isLoading } = useClasses();
   const [dialog, setDialog] = useState<
     "none" | "create" | "rename" | "members" | "teachers" | "delete"
@@ -96,7 +98,7 @@ export function ClassBar({
     }
   }
 
-  const single = classId !== ALL_CLASSES;
+  const single = classId !== ALL_CLASSES && Boolean(selected);
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -105,7 +107,7 @@ export function ClassBar({
           <SelectValue placeholder="Selecione a sala" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ALL_CLASSES}>Todas as salas</SelectItem>
+          {isMaster ? <SelectItem value={ALL_CLASSES}>Todas as salas</SelectItem> : null}
           {(classes ?? []).map((room) => (
             <SelectItem key={room.id} value={room.id}>
               {room.name}
@@ -205,7 +207,8 @@ export function ClassBar({
             <AlertDialogTitle>Excluir a sala “{selected?.name}”?</AlertDialogTitle>
             <AlertDialogDescription>
               Os quizzes desta sala são apagados e os alunos deixam de estar matriculados nela. O
-              extrato de pontos já lançado é mantido. Só quem criou a sala pode excluí-la.
+              extrato de pontos já lançado é mantido. Professores autorizados nesta sala podem
+              excluí-la.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -393,11 +396,13 @@ function TeachersDialog({
   onOpenChange: (value: boolean) => void;
 }) {
   const { data: people } = usePeople();
+  const { data: classes } = useClasses();
   const { data: teachers } = useClassTeachers(classId);
   const authorize = useAuthorizeTeacher(classId);
   const [search, setSearch] = useState("");
   const candidates = (people ?? []).filter((p) => !p.isMaster);
   const visible = candidates.filter((s) => matches(s, search));
+  const ownerId = classes?.find((room) => room.id === classId)?.teacher_id;
 
   return (
     <PeopleDialog
@@ -407,7 +412,7 @@ function TeachersDialog({
         onOpenChange(value);
       }}
       title="Delegar professor"
-      description="Marque quem dá aula nesta sala. Um aluno marcado vira professor; desmarcar tira desta sala e, se não sobrar nenhuma, volta a ser aluno."
+      description="Todos os professores autorizados podem administrar esta sala. O responsável principal não pode ser removido; os outros professores podem ser adicionados ou retirados daqui."
       search={search}
       onSearch={setSearch}
     >
@@ -419,8 +424,8 @@ function TeachersDialog({
             name={person.name}
             email={person.email}
             checked={authorized}
-            badge={person.isTeacher ? "Professor" : undefined}
-            disabled={authorize.isPending}
+            badge={person.id === ownerId ? "Responsável" : person.isTeacher ? "Professor" : undefined}
+            disabled={authorize.isPending || person.id === ownerId}
             onToggle={() =>
               authorize.mutate(
                 { userId: person.id, authorized },

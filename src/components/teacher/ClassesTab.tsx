@@ -1,6 +1,7 @@
 import { Loader2, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { useClasses } from "@/hooks/useClasses";
 import { EmptyState } from "@/components/States";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
@@ -16,9 +17,11 @@ export function ClassesTab({
   term: string;
   onTermChange: (value: string) => void;
 }) {
+  const { isMaster, session } = useAuth();
   const { data: classes, isLoading } = useClasses();
   const { data: memberCounts } = useQuery({
-    queryKey: ["class-member-counts"],
+    queryKey: ["class-member-counts", session?.user.id],
+    enabled: Boolean(session),
     queryFn: async (): Promise<Record<string, number>> => {
       const { data, error } = await supabase.from("class_members").select("class_id");
       if (error) throw error;
@@ -63,7 +66,9 @@ export function ClassesTab({
               <li key={room.id}>
                 <button
                   type="button"
-                  onClick={() => onClassChange(selected ? ALL_CLASSES : room.id)}
+                  onClick={() =>
+                    onClassChange(selected && isMaster ? ALL_CLASSES : room.id)
+                  }
                   aria-pressed={selected}
                   className={`grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4 text-left transition ${
                     selected ? "bg-primary/10" : "hover:bg-accent/40"

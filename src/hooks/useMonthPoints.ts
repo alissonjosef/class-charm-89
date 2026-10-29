@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 export type MonthTotals = { positive: number; negative: number; net: number };
 
@@ -12,8 +13,9 @@ export function monthRange(month: string): { start: string; end: string } {
 
 /** Positivos, negativos e saldo por aluno no mês; com `classId`, só os pontos lançados naquela sala. */
 export function useMonthPoints(month: string, classId: string | null = null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["month-points", month, classId],
+    queryKey: ["month-points", month, classId, session?.user.id],
     queryFn: async (): Promise<Record<string, MonthTotals>> => {
       const { start, end } = monthRange(month);
       let query = supabase

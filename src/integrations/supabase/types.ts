@@ -458,7 +458,7 @@ export type Database = {
         Returns: boolean;
       };
       promote_to_teacher: {
-        Args: { _user_id: string };
+        Args: { _user_id: string; _class_id: string };
         Returns: undefined;
       };
       revoke_teacher: {

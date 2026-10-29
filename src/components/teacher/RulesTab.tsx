@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 import { useRuleMutations, useRules } from "@/hooks/useRules";
 import type { Rule, RuleGroup } from "@/lib/points";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,9 @@ export function RulesTab({
   classId: string;
   onClassChange: (value: string) => void;
 }) {
-  const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const { isMaster } = useAuth();
+  const selectedClass = classId === ALL_CLASSES || !classId ? null : classId;
+  const canEditRules = Boolean(selectedClass) || isMaster;
   const { data, isLoading } = useRules(selectedClass);
   const { createGroup } = useRuleMutations();
   const [newGroup, setNewGroup] = useState("");
@@ -51,6 +54,18 @@ export function RulesTab({
         <div className="grid place-items-center py-16">
           <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
+      </div>
+    );
+  }
+
+  if (!canEditRules) {
+    return (
+      <div>
+        {bar}
+        <EmptyState
+          title="Selecione uma sala"
+          text="Escolha uma sala da qual você é professor para consultar e editar as regras."
+        />
       </div>
     );
   }

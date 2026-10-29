@@ -26,9 +26,10 @@ export function lessonTag(lesson: { lesson_number: number | null; lesson_date: s
 
 /** Aula de hoje da sala; sem sala selecionada não há aula vinculável. */
 export function useTodayLesson(classId: string | null) {
+  const { session } = useAuth();
   const today = todayInSaoPaulo();
   return useQuery({
-    queryKey: ["lesson", today, classId],
+    queryKey: ["lesson", today, classId, session?.user.id],
     enabled: Boolean(classId),
     queryFn: async (): Promise<Lesson | null> => {
       const { data, error } = await supabase
@@ -45,8 +46,9 @@ export function useTodayLesson(classId: string | null) {
 
 /** Com classId filtra a sala (incluindo aulas antigas sem sala); sem ele, o RLS limita ao que o usuário enxerga. */
 export function useLessons(classId?: string | null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["lessons", classId ?? null],
+    queryKey: ["lessons", classId ?? null, session?.user.id],
     queryFn: async (): Promise<Lesson[]> => {
       let query = supabase.from("lessons").select(LESSON_COLUMNS);
       if (classId) query = query.or(`class_id.eq.${classId},class_id.is.null`);
@@ -147,8 +149,9 @@ export function useDeleteLesson() {
 
 /** Total de pontos e quantidade de lançamentos vinculados a cada aula, para a tela de análise. */
 export function useLessonTotals(lessonIds: string[]) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["lesson-totals", lessonIds.slice().sort().join(",")],
+    queryKey: ["lesson-totals", lessonIds.slice().sort().join(","), session?.user.id],
     enabled: lessonIds.length > 0,
     queryFn: async (): Promise<Record<string, { total: number; count: number }>> => {
       const { data, error } = await supabase

@@ -19,8 +19,9 @@ const VERSE_COLUMNS =
 
 /** Versículos visíveis ao usuário; com classId filtra a sala (incluindo os antigos sem sala). */
 export function useWeeklyVerses(classId?: string | null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["weekly-verses", classId ?? null],
+    queryKey: ["weekly-verses", classId ?? null, session?.user.id],
     queryFn: async (): Promise<WeeklyVerse[]> => {
       let query = supabase.from("weekly_verses").select(VERSE_COLUMNS);
       if (classId) query = query.or(`class_id.eq.${classId},class_id.is.null`);

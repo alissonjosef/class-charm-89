@@ -32,11 +32,11 @@ export function AttendanceTab({
   onTermChange: (value: string) => void;
   onCelebrate: () => void;
 }) {
-  const { session } = useAuth();
+  const { session, isMaster } = useAuth();
   const queryClient = useQueryClient();
   const { data: allStudents, isLoading } = useStudents();
   const { data: classes } = useClasses();
-  const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const selectedClass = classId === ALL_CLASSES ? null : classId || null;
   const { data: rulesData } = useRules(selectedClass);
   const className = (classes ?? []).find((room) => room.id === classId)?.name ?? null;
   const { data: members } = useClassMembers(selectedClass);
@@ -44,8 +44,12 @@ export function AttendanceTab({
   const pointsOf = (studentId: string) => termPoints?.[studentId] ?? 0;
   const students = (
     classId === ALL_CLASSES
-      ? allStudents
-      : allStudents?.filter((student) => (members ?? []).includes(student.id))
+      ? isMaster
+        ? allStudents
+        : []
+      : classId
+        ? allStudents?.filter((student) => (members ?? []).includes(student.id))
+        : []
   )
     ?.slice()
     .sort((a, b) => pointsOf(b.id) - pointsOf(a.id));
@@ -62,7 +66,7 @@ export function AttendanceTab({
   const lessonClosed = Boolean(todayLesson?.closed_at);
   const studentIds = (students ?? []).map((s) => s.id);
   const { data: todayEntries } = useQuery({
-    queryKey: ["today-entries", today, studentIds.slice().sort().join(",")],
+    queryKey: ["today-entries", today, studentIds.slice().sort().join(","), session?.user.id],
     enabled: studentIds.length > 0,
     queryFn: async (): Promise<{ id: string; student_id: string; type: string }[]> => {
       const { data, error } = await supabase
@@ -124,7 +128,7 @@ export function AttendanceTab({
         points: rule.points,
         note: rule.label,
         registered_by: session!.user.id,
-        class_id: classId === ALL_CLASSES ? null : classId,
+        class_id: classId === ALL_CLASSES && isMaster ? null : classId || null,
         lesson_id: todayLesson?.id ?? null,
       });
       if (error) throw error;
@@ -171,10 +175,12 @@ export function AttendanceTab({
         />
         <EmptyState
           title={
-            classId === ALL_CLASSES ? "Nenhum aluno cadastrado ainda" : "Nenhum aluno nesta sala"
+            classId === ALL_CLASSES && isMaster
+              ? "Nenhum aluno cadastrado ainda"
+              : "Nenhum aluno nesta sala"
           }
           text={
-            classId === ALL_CLASSES
+            classId === ALL_CLASSES && isMaster
               ? "Peça para os alunos criarem a conta escolhendo a sala. Eles aparecerão aqui automaticamente."
               : "Na aba “Salas”, use “Alunos” para escolher quem faz parte desta turma."
           }

@@ -4,6 +4,7 @@ import { Loader2, Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { ruleLabel } from "@/lib/points";
 import { useRules } from "@/hooks/useRules";
 import { EmptyState } from "@/components/States";
@@ -57,25 +58,38 @@ export function HistoryTab({
   onTermChange: (value: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const { isMaster, session } = useAuth();
   const { data: students } = useStudents();
   const { data: rules } = useRules(undefined);
   const { data: classes } = useClasses();
-  const { data: lessons } = useLessons(classId === ALL_CLASSES ? null : classId);
+  const { data: lessons } = useLessons(classId === ALL_CLASSES || !classId ? null : classId);
   const [studentId, setStudentId] = useState(ALL);
   const [month, setMonth] = useState(ALL);
   const [lessonId, setLessonId] = useState(ALL);
   const [allTerms, setAllTerms] = useState(false);
   const termFilter = allTerms ? ALL : term;
-  const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const selectedClass = classId === ALL_CLASSES || !classId ? null : classId;
   const { data: members } = useClassMembers(selectedClass);
   const rankingMonth = month === ALL ? monthOf(todayInSaoPaulo()) : month;
-  const rankingStudents = selectedClass
+  const visibleStudents = selectedClass
     ? (students ?? []).filter((student) => (members ?? []).includes(student.id))
-    : (students ?? []);
+    : isMaster
+      ? (students ?? [])
+      : [];
+  const rankingStudents = visibleStudents;
   const { ranking } = useMonthRanking(rankingStudents, rankingMonth, selectedClass);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["class-history", classId, termFilter, studentId, month, lessonId],
+    queryKey: [
+      "class-history",
+      classId,
+      termFilter,
+      studentId,
+      month,
+      lessonId,
+      session?.user.id,
+    ],
+    enabled: isMaster || Boolean(classId),
     queryFn: async (): Promise<Row[]> => {
       let query = supabase
         .from("points_history")
@@ -85,7 +99,7 @@ export function HistoryTab({
         .order("created_at", { ascending: false })
         .limit(300);
       if (termFilter !== ALL) query = query.eq("term", termFilter);
-      if (classId !== ALL_CLASSES) query = query.eq("class_id", classId);
+      if (classId !== ALL_CLASSES && classId) query = query.eq("class_id", classId);
       if (studentId !== ALL) query = query.eq("student_id", studentId);
       if (lessonId !== ALL) query = query.eq("lesson_id", lessonId);
       if (month !== ALL) {
@@ -114,14 +128,14 @@ export function HistoryTab({
     onError: () => toast.error("Não foi possível estornar"),
   });
 
-  const nameOf = (id: string) => students?.find((s) => s.id === id)?.name ?? "Aluno";
+  const nameOf = (id: string) => visibleStudents.find((s) => s.id === id)?.name ?? "Aluno";
   const classNameOf = (id: string | null) => classes?.find((c) => c.id === id)?.name ?? null;
   const total = (data ?? []).reduce((sum, row) => sum + row.points, 0);
   const filtering =
     classId !== ALL_CLASSES || studentId !== ALL || month !== ALL || lessonId !== ALL;
 
   function clearFilters() {
-    onClassChange(ALL_CLASSES);
+    onClassChange(isMaster ? ALL_CLASSES : (classes?.[0]?.id ?? ""));
     setStudentId(ALL);
     setMonth(ALL);
     setLessonId(ALL);
@@ -136,7 +150,7 @@ export function HistoryTab({
             <SelectValue placeholder="Sala" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL_CLASSES}>Todas as salas</SelectItem>
+            {isMaster ? <SelectItem value={ALL_CLASSES}>Todas as salas</SelectItem> : null}
             {(classes ?? []).map((room) => (
               <SelectItem key={room.id} value={room.id}>
                 {room.name}
@@ -151,7 +165,7 @@ export function HistoryTab({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Todos os alunos</SelectItem>
-            {(students ?? []).map((student) => (
+            {visibleStudents.map((student) => (
               <SelectItem key={student.id} value={student.id}>
                 {student.name}
               </SelectItem>

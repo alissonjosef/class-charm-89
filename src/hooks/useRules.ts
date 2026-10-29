@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import type { Rule, RuleGroup } from "@/lib/points";
 
 export type RulesData = { groups: RuleGroup[]; rules: Rule[] };
@@ -9,8 +10,13 @@ export type RulesData = { groups: RuleGroup[]; rules: Rule[] };
  * das salas novas); `undefined` = todas (para rotular o extrato).
  */
 export function useRules(classId?: string | null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["point-rules", classId === undefined ? "all" : (classId ?? "default")],
+    queryKey: [
+      "point-rules",
+      classId === undefined ? "all" : (classId ?? "default"),
+      session?.user.id,
+    ],
     queryFn: async (): Promise<RulesData> => {
       let groupsQuery = supabase.from("point_groups").select("id, name, sort_order, class_id");
       if (classId === null) groupsQuery = groupsQuery.is("class_id", null);

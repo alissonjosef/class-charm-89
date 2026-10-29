@@ -43,8 +43,9 @@ function emptyQuestion(): QuizQuestion {
 }
 
 export function useQuizzes(term: string, classId: string | null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["quizzes", term, classId],
+    queryKey: ["quizzes", term, classId, session?.user.id],
     queryFn: async (): Promise<Quiz[]> => {
       let query = supabase
         .from("quizzes")
@@ -79,7 +80,11 @@ export function QuizzesTab({
 }) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Quiz | null>(null);
-  const { data: quizzes, isLoading } = useQuizzes(term, classId === ALL_CLASSES ? null : classId);
+  const { isMaster } = useAuth();
+  const selectedClass =
+    classId === ALL_CLASSES || !classId ? null : classId;
+  const canCreateQuiz = Boolean(selectedClass) || isMaster;
+  const { data: quizzes, isLoading } = useQuizzes(term, selectedClass);
   const [openQuiz, setOpenQuiz] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -118,7 +123,7 @@ export function QuizzesTab({
   if (creating)
     return (
       <QuizForm
-        classId={classId === ALL_CLASSES ? null : classId}
+        classId={selectedClass}
         onDone={() => setCreating(false)}
       />
     );
@@ -126,7 +131,7 @@ export function QuizzesTab({
   if (editing)
     return (
       <QuizForm
-        classId={editing.class_id ?? (classId === ALL_CLASSES ? null : classId)}
+        classId={editing.class_id ?? selectedClass}
         quiz={editing}
         onDone={() => setEditing(null)}
       />
@@ -140,7 +145,12 @@ export function QuizzesTab({
         term={term}
         onTermChange={onTermChange}
       />
-      <Button variant="ink" className="w-full sm:w-auto" onClick={() => setCreating(true)}>
+      <Button
+        variant="ink"
+        className="w-full sm:w-auto"
+        onClick={() => setCreating(true)}
+        disabled={!canCreateQuiz}
+      >
         <Plus className="size-4" /> Nova pergunta / quiz
       </Button>
 
@@ -251,7 +261,7 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
   const { data: students } = useStudents();
   const { data: memberIds } = useClassMembers(quiz.class_id);
   const reopenings = useQuery({
-    queryKey: ["quiz-reopenings", quiz.id],
+    queryKey: ["quiz-reopenings", quiz.id, session?.user.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quiz_reopenings")
@@ -284,7 +294,7 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
       toast.error(error instanceof Error ? error.message : "Não foi possível atualizar"),
   });
   const { data, isLoading } = useQuery({
-    queryKey: ["submissions", quiz.id],
+    queryKey: ["submissions", quiz.id, session?.user.id],
     refetchInterval: 15000,
     queryFn: async () => {
       const { data, error } = await supabase

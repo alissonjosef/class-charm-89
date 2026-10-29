@@ -2,15 +2,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-export type ClassRoom = { id: string; name: string; created_at: string };
+export type ClassRoom = {
+  id: string;
+  name: string;
+  created_at: string;
+  teacher_id: string;
+};
 
 export function useClasses() {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["classes"],
+    queryKey: ["classes", session?.user.id],
+    enabled: Boolean(session),
     queryFn: async (): Promise<ClassRoom[]> => {
       const { data, error } = await supabase
         .from("classes")
-        .select("id, name, created_at")
+        .select("id, name, created_at, teacher_id")
         .order("name");
       if (error) throw error;
       return (data ?? []) as ClassRoom[];
@@ -19,8 +26,9 @@ export function useClasses() {
 }
 
 export function useClassMembers(classId: string | null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["class-members", classId],
+    queryKey: ["class-members", classId, session?.user.id],
     enabled: Boolean(classId),
     queryFn: async (): Promise<string[]> => {
       const { data, error } = await supabase
@@ -41,7 +49,7 @@ export function useCreateClass() {
       const { data, error } = await supabase
         .from("classes")
         .insert({ name, teacher_id: session!.user.id })
-        .select("id, name, created_at")
+        .select("id, name, created_at, teacher_id")
         .single();
       if (error) throw error;
       return data as ClassRoom;
@@ -67,7 +75,7 @@ export function useDeleteClass() {
     mutationFn: async (id: string) => {
       const { data, error } = await supabase.from("classes").delete().eq("id", id).select("id");
       if (error) throw error;
-      if (!data?.length) throw new Error("Só quem criou a sala pode excluí-la");
+      if (!data?.length) throw new Error("Você não tem permissão para excluir esta sala");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["classes"] });
@@ -78,8 +86,9 @@ export function useDeleteClass() {
 }
 
 export function useClassTeachers(classId: string | null) {
+  const { session } = useAuth();
   return useQuery({
-    queryKey: ["class-teachers", classId],
+    queryKey: ["class-teachers", classId, session?.user.id],
     enabled: Boolean(classId),
     queryFn: async (): Promise<string[]> => {
       const { data, error } = await supabase
@@ -87,7 +96,13 @@ export function useClassTeachers(classId: string | null) {
         .select("teacher_id")
         .eq("class_id", classId!);
       if (error) throw error;
-      return (data ?? []).map((row) => row.teacher_id);
+      const { data: room, error: roomError } = await supabase
+        .from("classes")
+        .select("teacher_id")
+        .eq("id", classId!)
+        .single();
+      if (roomError) throw roomError;
+      return [...new Set([room.teacher_id, ...(data ?? []).map((row) => row.teacher_id)])];
     },
   });
 }
@@ -112,7 +127,10 @@ export function useAuthorizeTeacher(classId: string | null) {
         if (error) throw error;
         return { demoted: data === true };
       }
-      const { error: roleError } = await supabase.rpc("promote_to_teacher", { _user_id: userId });
+      const { error: roleError } = await supabase.rpc("promote_to_teacher", {
+        _user_id: userId,
+        _class_id: classId!,
+      });
       if (roleError) throw roleError;
       const { error } = await supabase
         .from("class_teachers")
