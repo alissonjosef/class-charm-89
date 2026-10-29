@@ -1,22 +1,26 @@
 import { Check, PartyPopper, X } from "lucide-react";
-import type { Quiz } from "@/lib/types";
+import type { Quiz, QuizAnswer } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 
-/** Revisão somente leitura: mostra a resposta do aluno e o gabarito. */
+/** Revisão somente leitura das respostas enviadas pelo aluno. */
 export function QuizReview({
   quiz,
   answers,
   score,
+  gradedAt,
   justSubmitted = false,
   onClose,
 }: {
   quiz: Quiz;
-  answers: number[];
+  answers: QuizAnswer[];
   score: number;
+  gradedAt: string | null;
   justSubmitted?: boolean;
   onClose: () => void;
 }) {
   const total = quiz.questions.reduce((sum, question) => sum + question.points, 0);
+  const pendingWrittenGrade =
+    quiz.questions.some((question) => question.answerType === "written") && !gradedAt;
 
   return (
     <div className="surface animate-pop-in overflow-hidden">
@@ -28,11 +32,20 @@ export function QuizReview({
           <div className="min-w-0">
             <h3 className="font-display text-base font-semibold">Respostas enviadas!</h3>
             <p className="text-xs text-muted-foreground">
-              Você fez{" "}
-              <b className="text-foreground">
-                {score} de {total}
-              </b>{" "}
-              pontos — já creditados no seu saldo. Confira suas respostas abaixo.
+              {pendingWrittenGrade ? (
+                <>
+                  Você ganhou {score} ponto(s) nas perguntas de alternativas. As respostas
+                  discursivas aguardam correção do professor.
+                </>
+              ) : (
+                <>
+                  Você fez{" "}
+                  <b className="text-foreground">
+                    {score} de {total}
+                  </b>{" "}
+                  pontos — já creditados no seu saldo. Confira suas respostas abaixo.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -42,18 +55,35 @@ export function QuizReview({
           <h3 className="truncate font-display text-base font-semibold">{quiz.title}</h3>
           <p className="text-xs text-muted-foreground">
             {justSubmitted
-              ? "Suas respostas e o gabarito."
+              ? "Confira suas respostas."
               : "Você já respondeu — respostas bloqueadas."}
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-gold px-3 py-1 font-display text-sm font-bold text-gold-foreground">
-          {score}/{total}
+          {pendingWrittenGrade ? "Correção pendente" : `${score}/${total}`}
         </span>
       </div>
 
       <div className="space-y-5 p-5">
         {quiz.questions.map((question, index) => {
           const chosen = answers[index] ?? -1;
+          if (question.answerType === "written") {
+            return (
+              <div key={question.id}>
+                <p className="font-display text-sm font-semibold leading-snug">
+                  {index + 1}. {question.statement}
+                </p>
+                <p className="mt-2 whitespace-pre-wrap break-words rounded-xl border border-border bg-card p-3 text-sm">
+                  {typeof chosen === "string" && chosen.trim() ? chosen : "Sem resposta"}
+                </p>
+                <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                  {gradedAt
+                    ? "Resposta corrigida pelo professor."
+                    : "Aguardando correção do professor."}
+                </p>
+              </div>
+            );
+          }
           const correct = chosen === question.correctOption;
           return (
             <div key={question.id}>

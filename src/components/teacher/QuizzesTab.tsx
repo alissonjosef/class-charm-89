@@ -19,6 +19,7 @@ import {
   QUIZ_COLUMNS,
   parseQuiz,
   quizStatus,
+  type QuizAnswer,
   type Quiz,
   type QuizQuestion,
   type QuizStatus,
@@ -36,6 +37,7 @@ function emptyQuestion(): QuizQuestion {
   return {
     id: crypto.randomUUID(),
     statement: "",
+    answerType: "multiple_choice",
     options: ["", ""],
     correctOption: 0,
     points: 10,
@@ -81,8 +83,7 @@ export function QuizzesTab({
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Quiz | null>(null);
   const { isMaster } = useAuth();
-  const selectedClass =
-    classId === ALL_CLASSES || !classId ? null : classId;
+  const selectedClass = classId === ALL_CLASSES || !classId ? null : classId;
   const canCreateQuiz = Boolean(selectedClass) || isMaster;
   const { data: quizzes, isLoading } = useQuizzes(term, selectedClass);
   const [openQuiz, setOpenQuiz] = useState<string | null>(null);
@@ -120,13 +121,7 @@ export function QuizzesTab({
     },
   });
 
-  if (creating)
-    return (
-      <QuizForm
-        classId={selectedClass}
-        onDone={() => setCreating(false)}
-      />
-    );
+  if (creating) return <QuizForm classId={selectedClass} onDone={() => setCreating(false)} />;
 
   if (editing)
     return (
@@ -299,15 +294,30 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("submissions")
-        .select("id, student_id, answers, score_obtained, submitted_at")
+        .select("id, student_id, answers, score_obtained, submitted_at, graded_at")
         .eq("quiz_id", quiz.id)
         .order("submitted_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
   });
+  const grade = useMutation({
+    mutationFn: async ({ submissionId, score }: { submissionId: string; score: number }) => {
+      const { error } = await supabase
+        .from("submissions")
+        .update({ score_obtained: score, graded_at: new Date().toISOString() })
+        .eq("id", submissionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Correção salva e pontos atualizados");
+      queryClient.invalidateQueries({ queryKey: ["submissions", quiz.id] });
+      queryClient.invalidateQueries({ queryKey: ["my-submissions"] });
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a correção"),
+  });
 
-  const total = quiz.questions.reduce((sum, q) => sum + q.points, 0);
   const answered = new Set((data ?? []).map((sub) => sub.student_id));
   const pending = (students ?? []).filter(
     (student) => (memberIds ?? []).includes(student.id) && !answered.has(student.id),
@@ -372,37 +382,135 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
         <p className="text-sm text-muted-foreground">Ninguém respondeu ainda.</p>
       ) : (
         <ul className="space-y-3">
-          {data.map((sub) => {
-            const answers = (sub.answers as number[]) ?? [];
-            return (
-              <li key={sub.id} className="rounded-xl border border-border bg-card p-3">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                  <p className="truncate text-sm font-medium">
-                    {students?.find((s) => s.id === sub.student_id)?.name ?? "Aluno"}
-                  </p>
-                  <span className="shrink-0 rounded-full bg-gold px-2.5 py-0.5 font-display text-xs font-bold text-gold-foreground">
-                    {sub.score_obtained}/{total}
-                  </span>
-                </div>
-                <ol className="mt-2 space-y-1">
-                  {quiz.questions.map((question, i) => {
-                    const chosen = answers[i];
-                    const ok = chosen === question.correctOption;
-                    return (
-                      <li key={question.id} className="text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">{i + 1}.</span>{" "}
-                        {question.options[chosen ?? -1] ?? "Sem resposta"}{" "}
-                        <b className={ok ? "text-success" : "text-destructive"}>{ok ? "✓" : "✕"}</b>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </li>
-            );
-          })}
+          {data.map((sub) => (
+            <SubmissionRow
+              key={sub.id}
+              quiz={quiz}
+              submission={sub}
+              studentName={students?.find((s) => s.id === sub.student_id)?.name ?? "Aluno"}
+              saving={grade.isPending}
+              onGrade={(score) => grade.mutate({ submissionId: sub.id, score })}
+            />
+          ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function SubmissionRow({
+  quiz,
+  submission,
+  studentName,
+  saving,
+  onGrade,
+}: {
+  quiz: Quiz;
+  submission: {
+    id: string;
+    answers: unknown;
+    score_obtained: number;
+    graded_at: string | null;
+  };
+  studentName: string;
+  saving: boolean;
+  onGrade: (score: number) => void;
+}) {
+  const answers = (submission.answers as QuizAnswer[]) ?? [];
+  const automaticScore = quiz.questions.reduce(
+    (sum, question, index) =>
+      sum +
+      (question.answerType === "multiple_choice" && answers[index] === question.correctOption
+        ? question.points
+        : 0),
+    0,
+  );
+  const writtenMaximum = quiz.questions.reduce(
+    (sum, question) => sum + (question.answerType === "written" ? question.points : 0),
+    0,
+  );
+  const hasWrittenQuestions = quiz.questions.some((question) => question.answerType === "written");
+  const total = quiz.questions.reduce((sum, question) => sum + question.points, 0);
+  const hasPendingWrittenGrade = hasWrittenQuestions && !submission.graded_at;
+  const [writtenPoints, setWrittenPoints] = useState(
+    String(Math.max(0, submission.score_obtained - automaticScore)),
+  );
+  const parsedWrittenPoints = Number(writtenPoints);
+  const validScore =
+    writtenPoints.trim() !== "" &&
+    Number.isInteger(parsedWrittenPoints) &&
+    parsedWrittenPoints >= 0 &&
+    parsedWrittenPoints <= writtenMaximum;
+
+  return (
+    <li className="rounded-xl border border-border bg-card p-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <p className="truncate text-sm font-medium">{studentName}</p>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-0.5 font-display text-xs font-bold ${
+            hasPendingWrittenGrade
+              ? "bg-accent text-accent-foreground"
+              : "bg-gold text-gold-foreground"
+          }`}
+        >
+          {hasPendingWrittenGrade ? "Correção pendente" : `${submission.score_obtained}/${total}`}
+        </span>
+      </div>
+      <ol className="mt-3 space-y-3">
+        {quiz.questions.map((question, index) => {
+          const answer = answers[index];
+          return (
+            <li key={question.id} className="text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">
+                {index + 1}. {question.statement}
+              </p>
+              <p className="mt-1 whitespace-pre-wrap break-words">
+                {question.answerType === "written"
+                  ? typeof answer === "string" && answer.trim()
+                    ? answer
+                    : "Sem resposta"
+                  : typeof answer === "number"
+                    ? (question.options[answer] ?? "Sem resposta")
+                    : "Sem resposta"}
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+      {hasWrittenQuestions ? (
+        <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3">
+          <div className="space-y-1">
+            <Label htmlFor={`grade-${submission.id}`} className="text-xs">
+              Pontos das respostas discursivas (máximo {writtenMaximum})
+            </Label>
+            <Input
+              id={`grade-${submission.id}`}
+              type="number"
+              min={0}
+              max={writtenMaximum}
+              step={1}
+              className="h-9 w-36"
+              value={writtenPoints}
+              onChange={(event) => setWrittenPoints(event.target.value)}
+            />
+          </div>
+          <Button
+            variant="ink"
+            size="sm"
+            disabled={saving || !validScore}
+            onClick={() => onGrade(automaticScore + parsedWrittenPoints)}
+          >
+            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+            {submission.graded_at ? "Salvar correção" : "Corrigir resposta"}
+          </Button>
+          {hasPendingWrittenGrade ? (
+            <span className="text-xs text-muted-foreground">
+              Os pontos das alternativas já foram creditados.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -458,12 +566,19 @@ function QuizForm({
       const clean = questions.map((q) => ({
         ...q,
         statement: q.statement.trim(),
-        options: q.options.map((o) => o.trim()).filter(Boolean),
+        options:
+          q.answerType === "multiple_choice" ? q.options.map((o) => o.trim()).filter(Boolean) : [],
       }));
       if (clean.some((q) => !q.statement)) throw new Error("Toda pergunta precisa de enunciado");
-      if (clean.some((q) => q.options.length < 2))
+      if (clean.some((q) => q.answerType === "multiple_choice" && q.options.length < 2))
         throw new Error("Cada pergunta precisa de ao menos 2 alternativas");
-      if (clean.some((q) => q.correctOption >= q.options.length))
+      if (
+        clean.some(
+          (q) =>
+            q.answerType === "multiple_choice" &&
+            (q.correctOption < 0 || q.correctOption >= q.options.length),
+        )
+      )
         throw new Error("Marque a alternativa correta de cada pergunta");
 
       const scheduled = openAt ? new Date(openAt).toISOString() : null;
@@ -599,65 +714,95 @@ function QuizForm({
             onChange={(e) => update(question.id, { statement: e.target.value })}
             placeholder="Escreva o enunciado"
           />
-          <div className="space-y-2">
-            {question.options.map((option, optionIndex) => (
-              <div key={optionIndex} className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Marcar como correta"
-                  onClick={() => update(question.id, { correctOption: optionIndex })}
-                  className={`grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-all ${
-                    question.correctOption === optionIndex
-                      ? "border-success bg-success text-success-foreground"
-                      : "border-border bg-secondary text-muted-foreground"
-                  }`}
-                >
-                  {String.fromCharCode(65 + optionIndex)}
-                </button>
-                <Input
-                  value={option}
-                  maxLength={200}
-                  onChange={(e) =>
-                    update(question.id, {
-                      options: question.options.map((o, i) =>
-                        i === optionIndex ? e.target.value : o,
-                      ),
-                    })
-                  }
-                  placeholder={`Alternativa ${String.fromCharCode(65 + optionIndex)}`}
-                />
-                {question.options.length > 2 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                    aria-label="Remover alternativa"
-                    onClick={() => {
-                      const options = question.options.filter((_, i) => i !== optionIndex);
-                      const correctOption =
-                        question.correctOption === optionIndex
-                          ? 0
-                          : question.correctOption > optionIndex
-                            ? question.correctOption - 1
-                            : question.correctOption;
-                      update(question.id, { options, correctOption });
-                    }}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                ) : null}
-              </div>
-            ))}
+          <div className="space-y-1.5">
+            <Label>Formato da resposta</Label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant={question.answerType === "multiple_choice" ? "ink" : "soft"}
+                size="sm"
+                onClick={() => update(question.id, { answerType: "multiple_choice" })}
+              >
+                Alternativas
+              </Button>
+              <Button
+                type="button"
+                variant={question.answerType === "written" ? "ink" : "soft"}
+                size="sm"
+                onClick={() => update(question.id, { answerType: "written" })}
+              >
+                Discursiva
+              </Button>
+            </div>
           </div>
+          {question.answerType === "multiple_choice" ? (
+            <div className="space-y-2">
+              {question.options.map((option, optionIndex) => (
+                <div key={optionIndex} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Marcar como correta"
+                    onClick={() => update(question.id, { correctOption: optionIndex })}
+                    className={`grid size-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-all ${
+                      question.correctOption === optionIndex
+                        ? "border-success bg-success text-success-foreground"
+                        : "border-border bg-secondary text-muted-foreground"
+                    }`}
+                  >
+                    {String.fromCharCode(65 + optionIndex)}
+                  </button>
+                  <Input
+                    value={option}
+                    maxLength={200}
+                    onChange={(e) =>
+                      update(question.id, {
+                        options: question.options.map((o, i) =>
+                          i === optionIndex ? e.target.value : o,
+                        ),
+                      })
+                    }
+                    placeholder={`Alternativa ${String.fromCharCode(65 + optionIndex)}`}
+                  />
+                  {question.options.length > 2 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label="Remover alternativa"
+                      onClick={() => {
+                        const options = question.options.filter((_, i) => i !== optionIndex);
+                        const correctOption =
+                          question.correctOption === optionIndex
+                            ? 0
+                            : question.correctOption > optionIndex
+                              ? question.correctOption - 1
+                              : question.correctOption;
+                        update(question.id, { options, correctOption });
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              O aluno responderá com suas próprias palavras. A correção e a pontuação serão feitas
+              por você depois do envio.
+            </p>
+          )}
           <div className="flex flex-wrap items-end gap-3">
-            <Button
-              variant="soft"
-              size="sm"
-              onClick={() => update(question.id, { options: [...question.options, ""] })}
-            >
-              <Plus className="size-4" /> Alternativa
-            </Button>
+            {question.answerType === "multiple_choice" ? (
+              <Button
+                variant="soft"
+                size="sm"
+                onClick={() => update(question.id, { options: [...question.options, ""] })}
+              >
+                <Plus className="size-4" /> Alternativa
+              </Button>
+            ) : null}
             <div className="space-y-1">
               <Label className="text-xs">Pontos</Label>
               <Input

@@ -398,6 +398,7 @@ export type Database = {
       submissions: {
         Row: {
           answers: Json;
+          graded_at: string | null;
           id: string;
           quiz_id: string;
           score_obtained: number;
@@ -406,6 +407,7 @@ export type Database = {
         };
         Insert: {
           answers?: Json;
+          graded_at?: string | null;
           id?: string;
           quiz_id: string;
           score_obtained?: number;
@@ -414,6 +416,7 @@ export type Database = {
         };
         Update: {
           answers?: Json;
+          graded_at?: string | null;
           id?: string;
           quiz_id?: string;
           score_obtained?: number;

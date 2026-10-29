@@ -1,10 +1,15 @@
+export type QuizAnswerType = "multiple_choice" | "written";
+
 export type QuizQuestion = {
   id: string;
   statement: string;
+  answerType: QuizAnswerType;
   options: string[];
   correctOption: number;
   points: number;
 };
+
+export type QuizAnswer = number | string;
 
 export type Quiz = {
   id: string;
@@ -43,9 +48,10 @@ export type Submission = {
   id: string;
   quiz_id: string;
   student_id: string;
-  answers: number[];
+  answers: QuizAnswer[];
   score_obtained: number;
   submitted_at: string;
+  graded_at: string | null;
 };
 
 export const QUIZ_COLUMNS =
@@ -64,5 +70,15 @@ export function parseQuiz(row: {
   closed_at: string | null;
   term: string;
 }): Quiz {
-  return { ...row, questions: (row.questions as QuizQuestion[]) ?? [] };
+  const questions =
+    (row.questions as (Omit<QuizQuestion, "answerType"> & {
+      answerType?: QuizAnswerType;
+    })[]) ?? [];
+  return {
+    ...row,
+    questions: questions.map((question) => ({
+      ...question,
+      answerType: question.answerType === "written" ? "written" : "multiple_choice",
+    })),
+  };
 }

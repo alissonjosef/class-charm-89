@@ -30,7 +30,7 @@ import { lessonTag, useLessons } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
 import { VerseDialog } from "@/components/VerseDialog";
 import { currentVerse, useWeeklyVerses, type WeeklyVerse } from "@/hooks/useWeeklyVerses";
-import { QUIZ_COLUMNS, parseQuiz, quizStatus, type Quiz } from "@/lib/types";
+import { QUIZ_COLUMNS, parseQuiz, quizStatus, type Quiz, type QuizAnswer } from "@/lib/types";
 import { currentTerm, isVisibleTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
 import {
   Select,
@@ -454,8 +454,9 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
   const [active, setActive] = useState<Quiz | null>(null);
   const [reviewing, setReviewing] = useState<{
     quiz: Quiz;
-    answers: number[];
+    answers: QuizAnswer[];
     score: number;
+    gradedAt: string | null;
     justSubmitted: boolean;
   } | null>(null);
 
@@ -490,16 +491,18 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
 
   const done = useQuery({
     queryKey: ["my-submissions", session?.user.id],
+    refetchInterval: 15000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("submissions")
-        .select("quiz_id, score_obtained, answers")
+        .select("quiz_id, score_obtained, answers, graded_at")
         .eq("student_id", session!.user.id);
       if (error) throw error;
       return (data ?? []).map((row) => ({
         quiz_id: row.quiz_id,
         score_obtained: row.score_obtained,
-        answers: (row.answers as number[]) ?? [],
+        answers: (row.answers as QuizAnswer[]) ?? [],
+        graded_at: row.graded_at,
       }));
     },
   });
@@ -510,9 +513,9 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
         quiz={active}
         onClose={() => setActive(null)}
         onCelebrate={onCelebrate}
-        onSubmitted={(answers, score) => {
+        onSubmitted={(answers, score, gradedAt) => {
           setActive(null);
-          setReviewing({ quiz: active, answers, score, justSubmitted: true });
+          setReviewing({ quiz: active, answers, score, gradedAt, justSubmitted: true });
         }}
       />
     );
@@ -524,6 +527,7 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
         quiz={reviewing.quiz}
         answers={reviewing.answers}
         score={reviewing.score}
+        gradedAt={reviewing.gradedAt}
         justSubmitted={reviewing.justSubmitted}
         onClose={() => setReviewing(null)}
       />
@@ -596,9 +600,16 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
               </div>
               {submission ? (
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/12 px-3 py-1 text-xs font-semibold text-success">
-                    <CheckCircle2 className="size-3.5" /> {submission.score_obtained} pts
-                  </span>
+                  {quiz.questions.some((question) => question.answerType === "written") &&
+                  !submission.graded_at ? (
+                    <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground">
+                      Correção pendente
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-success/12 px-3 py-1 text-xs font-semibold text-success">
+                      <CheckCircle2 className="size-3.5" /> {submission.score_obtained} pts
+                    </span>
+                  )}
                   <Button
                     variant="soft"
                     size="sm"
@@ -607,6 +618,7 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
                         quiz,
                         answers: submission.answers,
                         score: submission.score_obtained,
+                        gradedAt: submission.graded_at,
                         justSubmitted: false,
                       })
                     }
