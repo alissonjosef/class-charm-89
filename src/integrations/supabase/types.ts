@@ -143,6 +143,7 @@ export type Database = {
       };
       weekly_verses: {
         Row: {
+          class_id: string | null;
           id: string;
           release_date: string;
           reference: string;
@@ -152,6 +153,7 @@ export type Database = {
           created_at: string;
         };
         Insert: {
+          class_id?: string | null;
           id?: string;
           release_date: string;
           reference: string;
@@ -161,6 +163,7 @@ export type Database = {
           created_at?: string;
         };
         Update: {
+          class_id?: string | null;
           id?: string;
           release_date?: string;
           reference?: string;
@@ -179,6 +182,7 @@ export type Database = {
       };
       lessons: {
         Row: {
+          class_id: string | null;
           closed_at: string | null;
           created_at: string;
           created_by: string | null;
@@ -189,6 +193,7 @@ export type Database = {
           theme: string;
         };
         Insert: {
+          class_id?: string | null;
           closed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -199,6 +204,7 @@ export type Database = {
           theme: string;
         };
         Update: {
+          class_id?: string | null;
           closed_at?: string | null;
           created_at?: string;
           created_by?: string | null;

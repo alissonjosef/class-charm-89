@@ -12,10 +12,11 @@ export type Lesson = {
   created_by: string | null;
   created_at: string;
   closed_at: string | null;
+  class_id: string | null;
 };
 
 const LESSON_COLUMNS =
-  "id, lesson_date, lesson_number, theme, description, created_by, created_at, closed_at";
+  "id, lesson_date, lesson_number, theme, description, created_by, created_at, closed_at, class_id";
 
 /** "Lição 3 · 3º trimestre de 2026" — usado no card da aula e no extrato. */
 export function lessonTag(lesson: { lesson_number: number | null; lesson_date: string }): string {
@@ -23,15 +24,18 @@ export function lessonTag(lesson: { lesson_number: number | null; lesson_date: s
   return lesson.lesson_number ? `Lição ${lesson.lesson_number} · ${term}` : term;
 }
 
-export function useTodayLesson() {
+/** Aula de hoje da sala; sem sala selecionada não há aula vinculável. */
+export function useTodayLesson(classId: string | null) {
   const today = todayInSaoPaulo();
   return useQuery({
-    queryKey: ["lesson", today],
+    queryKey: ["lesson", today, classId],
+    enabled: Boolean(classId),
     queryFn: async (): Promise<Lesson | null> => {
       const { data, error } = await supabase
         .from("lessons")
         .select(LESSON_COLUMNS)
         .eq("lesson_date", today)
+        .eq("class_id", classId!)
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -39,13 +43,14 @@ export function useTodayLesson() {
   });
 }
 
-export function useLessons() {
+/** Com classId filtra a sala (incluindo aulas antigas sem sala); sem ele, o RLS limita ao que o usuário enxerga. */
+export function useLessons(classId?: string | null) {
   return useQuery({
-    queryKey: ["lessons"],
+    queryKey: ["lessons", classId ?? null],
     queryFn: async (): Promise<Lesson[]> => {
-      const { data, error } = await supabase
-        .from("lessons")
-        .select(LESSON_COLUMNS)
+      let query = supabase.from("lessons").select(LESSON_COLUMNS);
+      if (classId) query = query.or(`class_id.eq.${classId},class_id.is.null`);
+      const { data, error } = await query
         .order("lesson_date", { ascending: false })
         .limit(60);
       if (error) throw error;
@@ -60,12 +65,14 @@ export function useSaveLesson() {
   return useMutation({
     mutationFn: async ({
       id,
+      classId,
       lessonDate,
       lessonNumber,
       theme,
       description,
     }: {
       id?: string;
+      classId?: string;
       lessonDate: string;
       lessonNumber: number | null;
       theme: string;
@@ -86,7 +93,9 @@ export function useSaveLesson() {
         if (!data?.length) throw new Error("Não foi possível salvar a aula");
         return;
       }
+      if (!classId) throw new Error("Selecione a sala da aula");
       const { error } = await supabase.from("lessons").insert({
+        class_id: classId,
         lesson_date: lessonDate,
         lesson_number: lessonNumber,
         theme,

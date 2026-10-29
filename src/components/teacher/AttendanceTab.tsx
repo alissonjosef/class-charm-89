@@ -58,7 +58,7 @@ export function AttendanceTab({
   const month = monthOf(today);
   const { rankOf } = useMonthRanking(students ?? [], month, selectedClass);
   const presenceRule = (rulesData?.rules ?? []).find((r) => r.key === "PRESENCA");
-  const { data: todayLesson } = useTodayLesson();
+  const { data: todayLesson } = useTodayLesson(selectedClass);
   const lessonClosed = Boolean(todayLesson?.closed_at);
   const studentIds = (students ?? []).map((s) => s.id);
   const { data: todayEntries } = useQuery({

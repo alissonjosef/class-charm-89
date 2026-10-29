@@ -11,18 +11,20 @@ export type WeeklyVerse = {
   theme: string | null;
   created_by: string | null;
   created_at: string;
+  class_id: string | null;
 };
 
-const VERSE_COLUMNS = "id, release_date, reference, verse_text, theme, created_by, created_at";
+const VERSE_COLUMNS =
+  "id, release_date, reference, verse_text, theme, created_by, created_at, class_id";
 
-/** Todos os versículos que o usuário pode ver (RLS esconde dos alunos os ainda não liberados). */
-export function useWeeklyVerses() {
+/** Versículos visíveis ao usuário; com classId filtra a sala (incluindo os antigos sem sala). */
+export function useWeeklyVerses(classId?: string | null) {
   return useQuery({
-    queryKey: ["weekly-verses"],
+    queryKey: ["weekly-verses", classId ?? null],
     queryFn: async (): Promise<WeeklyVerse[]> => {
-      const { data, error } = await supabase
-        .from("weekly_verses")
-        .select(VERSE_COLUMNS)
+      let query = supabase.from("weekly_verses").select(VERSE_COLUMNS);
+      if (classId) query = query.or(`class_id.eq.${classId},class_id.is.null`);
+      const { data, error } = await query
         .order("release_date", { ascending: false })
         .limit(60);
       if (error) throw error;
@@ -51,12 +53,14 @@ export function useSaveWeeklyVerse() {
   return useMutation({
     mutationFn: async ({
       id,
+      classId,
       releaseDate,
       reference,
       verseText,
       theme,
     }: {
       id?: string;
+      classId?: string;
       releaseDate: string;
       reference: string;
       verseText: string;
@@ -73,9 +77,10 @@ export function useSaveWeeklyVerse() {
         if (error) throw error;
         return;
       }
+      if (!classId) throw new Error("Selecione a sala do versículo");
       const { error } = await supabase
         .from("weekly_verses")
-        .insert({ ...row, created_by: session!.user.id });
+        .insert({ ...row, class_id: classId, created_by: session!.user.id });
       if (error) {
         if (error.code === "23505") throw new Error("Já existe um versículo para essa data");
         throw error;

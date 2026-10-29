@@ -23,6 +23,7 @@ import {
 import { EmptyState } from "@/components/States";
 import { useLessons, useSaveLesson, type Lesson } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
+import { ClassBar, ALL_CLASSES } from "@/components/teacher/ClassBar";
 import { WeeklyVerseCard } from "@/components/teacher/WeeklyVerseCard";
 import {
   LESSONS_PER_TERM,
@@ -40,10 +41,17 @@ function lessonStatus(lesson: Lesson): "agendada" | "aberta" | "concluída" {
   return lesson.lesson_date > todayInSaoPaulo() ? "agendada" : "aberta";
 }
 
-export function LessonTab() {
+export function LessonTab({
+  classId,
+  onClassChange,
+}: {
+  classId: string;
+  onClassChange: (value: string) => void;
+}) {
   const today = todayInSaoPaulo();
   const term = currentTermSaoPaulo();
-  const { data: lessons, isLoading } = useLessons();
+  const selectedClass = classId === ALL_CLASSES ? null : classId;
+  const { data: lessons, isLoading } = useLessons(selectedClass);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const openLesson = lessons?.find((l) => l.id === openId) ?? null;
@@ -64,6 +72,28 @@ export function LessonTab() {
     );
   }
 
+  const classBar = (
+    <ClassBar
+      classId={classId}
+      onChange={onClassChange}
+      term={term}
+      onTermChange={() => {}}
+      showTerm={false}
+    />
+  );
+
+  if (!selectedClass) {
+    return (
+      <div className="space-y-4">
+        {classBar}
+        <EmptyState
+          title="Selecione uma sala"
+          text="As aulas são específicas de cada sala. Escolha a sala para ver ou criar aulas."
+        />
+      </div>
+    );
+  }
+
   const terms = Array.from(
     new Set([term, ...(lessons ?? []).map((l) => termOfDate(l.lesson_date))]),
   )
@@ -73,6 +103,7 @@ export function LessonTab() {
 
   return (
     <div className="space-y-6">
+      {classBar}
       <TermBox
         term={term}
         lessons={termLessons}
@@ -110,7 +141,7 @@ export function LessonTab() {
         </div>
       </div>
 
-      <WeeklyVerseCard />
+      <WeeklyVerseCard classId={selectedClass} />
 
       {scheduled.length ? (
         <div className="space-y-2">
@@ -167,6 +198,7 @@ export function LessonTab() {
       {creating && (
         <NewLessonDialog
           key={creating.number ?? "free"}
+          classId={selectedClass}
           initialNumber={creating.number}
           lessons={lessons ?? []}
           onClose={() => setCreating(null)}
@@ -212,10 +244,12 @@ function LessonRow({ lesson, onOpen }: { lesson: Lesson; onOpen: (id: string) =>
 
 /** Montado só enquanto aberto: cada "Nova aula" começa com o formulário limpo. */
 function NewLessonDialog({
+  classId,
   initialNumber,
   lessons,
   onClose,
 }: {
+  classId: string;
   initialNumber: number | null;
   lessons: Lesson[];
   onClose: () => void;
@@ -246,6 +280,7 @@ function NewLessonDialog({
     }
     saveLesson.mutate(
       {
+        classId,
         lessonDate: date,
         lessonNumber: lessonNumber === NO_NUMBER ? null : Number(lessonNumber),
         theme: theme.trim(),

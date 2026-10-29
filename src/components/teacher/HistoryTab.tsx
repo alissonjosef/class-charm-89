@@ -60,7 +60,7 @@ export function HistoryTab({
   const { data: students } = useStudents();
   const { data: rules } = useRules(undefined);
   const { data: classes } = useClasses();
-  const { data: lessons } = useLessons();
+  const { data: lessons } = useLessons(classId === ALL_CLASSES ? null : classId);
   const [studentId, setStudentId] = useState(ALL);
   const [month, setMonth] = useState(ALL);
   const [lessonId, setLessonId] = useState(ALL);

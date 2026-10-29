@@ -82,7 +82,7 @@ function TeacherPage() {
           />
         </TabsContent>
         <TabsContent value="aula">
-          <LessonTab />
+          <LessonTab classId={classId} onClassChange={selectClass} />
         </TabsContent>
         <TabsContent value="extrato">
           <HistoryTab

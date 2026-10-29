@@ -16,9 +16,9 @@ import { todayInSaoPaulo } from "@/lib/terms";
 
 const EMPTY = { releaseDate: "", reference: "", verseText: "", theme: "" };
 
-export function WeeklyVerseCard() {
+export function WeeklyVerseCard({ classId }: { classId: string }) {
   const today = todayInSaoPaulo();
-  const { data: verses } = useWeeklyVerses();
+  const { data: verses } = useWeeklyVerses(classId);
   const save = useSaveWeeklyVerse();
   const remove = useDeleteWeeklyVerse();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,6 +58,7 @@ export function WeeklyVerseCard() {
     save.mutate(
       {
         ...(editingId ? { id: editingId } : {}),
+        classId,
         releaseDate: form.releaseDate,
         reference: form.reference.trim(),
         verseText: form.verseText.trim(),
