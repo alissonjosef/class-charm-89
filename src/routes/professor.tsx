@@ -84,7 +84,7 @@ function TeacherPage() {
         >
           <TabsTrigger value="aula">Aula</TabsTrigger>
           <TabsTrigger value="chamada">Chamada</TabsTrigger>
-          <TabsTrigger value="quizzes">Quizzes</TabsTrigger>
+          <TabsTrigger value="quizzes">Avaliação</TabsTrigger>
           <TabsTrigger value="extrato">Extrato</TabsTrigger>
           <TabsTrigger value="regras">Regras</TabsTrigger>
           <TabsTrigger value="salas">Salas</TabsTrigger>

@@ -400,6 +400,7 @@ export type Database = {
           answers: Json;
           graded_at: string | null;
           id: string;
+          question_grades: Json;
           quiz_id: string;
           score_obtained: number;
           student_id: string;
@@ -409,6 +410,7 @@ export type Database = {
           answers?: Json;
           graded_at?: string | null;
           id?: string;
+          question_grades?: Json;
           quiz_id: string;
           score_obtained?: number;
           student_id: string;
@@ -418,6 +420,7 @@ export type Database = {
           answers?: Json;
           graded_at?: string | null;
           id?: string;
+          question_grades?: Json;
           quiz_id?: string;
           score_obtained?: number;
           student_id?: string;

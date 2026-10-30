@@ -11,6 +11,27 @@ export type QuizQuestion = {
 
 export type QuizAnswer = number | string;
 
+export type QuestionGrade = {
+  correct: boolean | null;
+  points: number | null;
+};
+
+export function parseQuestionGrades(value: unknown): QuestionGrade[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.map((grade) => {
+    if (!grade || typeof grade !== "object") return { correct: null, points: null };
+    const item = grade as Record<string, unknown>;
+    return {
+      correct: typeof item["correct"] === "boolean" ? item["correct"] : null,
+      points:
+        typeof item["points"] === "number" && Number.isInteger(item["points"])
+          ? item["points"]
+          : null,
+    };
+  });
+}
+
 export type Quiz = {
   id: string;
   title: string;

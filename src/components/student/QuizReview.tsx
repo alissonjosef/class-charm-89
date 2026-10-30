@@ -1,11 +1,12 @@
 import { Check, PartyPopper, X } from "lucide-react";
-import type { Quiz, QuizAnswer } from "@/lib/types";
+import type { QuestionGrade, Quiz, QuizAnswer } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 
 /** Revisão somente leitura das respostas enviadas pelo aluno. */
 export function QuizReview({
   quiz,
   answers,
+  questionGrades,
   score,
   gradedAt,
   justSubmitted = false,
@@ -13,14 +14,20 @@ export function QuizReview({
 }: {
   quiz: Quiz;
   answers: QuizAnswer[];
+  questionGrades: (QuestionGrade | null)[];
   score: number;
   gradedAt: string | null;
   justSubmitted?: boolean;
   onClose: () => void;
 }) {
   const total = quiz.questions.reduce((sum, question) => sum + question.points, 0);
-  const pendingWrittenGrade =
-    quiz.questions.some((question) => question.answerType === "written") && !gradedAt;
+  const pendingWrittenGrade = quiz.questions.some((question, index) => {
+    const grade = questionGrades[index];
+    return (
+      question.answerType === "written" &&
+      (!gradedAt || !grade || grade.correct === null || grade.points === null)
+    );
+  });
 
   return (
     <div className="surface animate-pop-in overflow-hidden">
@@ -76,11 +83,23 @@ export function QuizReview({
                 <p className="mt-2 whitespace-pre-wrap break-words rounded-xl border border-border bg-card p-3 text-sm">
                   {typeof chosen === "string" && chosen.trim() ? chosen : "Sem resposta"}
                 </p>
-                <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                  {gradedAt
-                    ? "Resposta corrigida pelo professor."
-                    : "Aguardando correção do professor."}
-                </p>
+                {questionGrades[index]?.correct !== null &&
+                questionGrades[index]?.correct !== undefined &&
+                questionGrades[index]?.points !== null &&
+                questionGrades[index]?.points !== undefined ? (
+                  <p
+                    className={`mt-2 text-xs font-semibold ${
+                      questionGrades[index]?.correct ? "text-success" : "text-destructive"
+                    }`}
+                  >
+                    {questionGrades[index]?.correct ? "Acertou" : "Errou"} · +
+                    {questionGrades[index]?.points} de {question.points} pontos
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                    Aguardando correção do professor.
+                  </p>
+                )}
               </div>
             );
           }

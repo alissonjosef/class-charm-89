@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock,
+  Check,
   Loader2,
   Lock,
   LockOpen,
@@ -22,7 +23,9 @@ import {
   type QuizAnswer,
   type Quiz,
   type QuizQuestion,
+  type QuestionGrade,
   type QuizStatus,
+  parseQuestionGrades,
 } from "@/lib/types";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import { Button } from "@/components/ui/button";
@@ -116,7 +119,7 @@ export function QuizzesTab({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Quiz removido");
+      toast.success("Avaliação removida");
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
     },
   });
@@ -146,7 +149,7 @@ export function QuizzesTab({
         onClick={() => setCreating(true)}
         disabled={!canCreateQuiz}
       >
-        <Plus className="size-4" /> Nova pergunta / quiz
+        <Plus className="size-4" /> Nova avaliação
       </Button>
 
       {isLoading ? (
@@ -155,8 +158,8 @@ export function QuizzesTab({
         </div>
       ) : !quizzes?.length ? (
         <EmptyState
-          title="Nenhum quiz criado"
-          text="Crie o quiz com calma: ele fica como rascunho até você liberar para a sala."
+          title="Nenhuma avaliação criada"
+          text="Crie a avaliação com calma: ela fica como rascunho até você liberar para a sala."
         />
       ) : (
         <div className="space-y-3">
@@ -228,7 +231,7 @@ export function QuizzesTab({
                     size="sm"
                     onClick={() => setOpenQuiz(openQuiz === quiz.id ? null : quiz.id)}
                   >
-                    <Users className="size-4" /> Alunos
+                    <Users className="size-4" /> Correção
                   </Button>
                   <Button
                     variant="ghost"
@@ -294,7 +297,7 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("submissions")
-        .select("id, student_id, answers, score_obtained, submitted_at, graded_at")
+        .select("id, student_id, answers, question_grades, score_obtained, submitted_at, graded_at")
         .eq("quiz_id", quiz.id)
         .order("submitted_at", { ascending: false });
       if (error) throw error;
@@ -302,10 +305,22 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
     },
   });
   const grade = useMutation({
-    mutationFn: async ({ submissionId, score }: { submissionId: string; score: number }) => {
+    mutationFn: async ({
+      submissionId,
+      score,
+      questionGrades,
+    }: {
+      submissionId: string;
+      score: number;
+      questionGrades: (QuestionGrade | null)[];
+    }) => {
       const { error } = await supabase
         .from("submissions")
-        .update({ score_obtained: score, graded_at: new Date().toISOString() })
+        .update({
+          score_obtained: score,
+          question_grades: questionGrades,
+          graded_at: new Date().toISOString(),
+        })
         .eq("id", submissionId);
       if (error) throw error;
     },
@@ -389,7 +404,9 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
               submission={sub}
               studentName={students?.find((s) => s.id === sub.student_id)?.name ?? "Aluno"}
               saving={grade.isPending}
-              onGrade={(score) => grade.mutate({ submissionId: sub.id, score })}
+              onGrade={(score, questionGrades) =>
+                grade.mutate({ submissionId: sub.id, score, questionGrades })
+              }
             />
           ))}
         </ul>
@@ -409,14 +426,23 @@ function SubmissionRow({
   submission: {
     id: string;
     answers: unknown;
+    question_grades: unknown;
     score_obtained: number;
     graded_at: string | null;
   };
   studentName: string;
   saving: boolean;
-  onGrade: (score: number) => void;
+  onGrade: (score: number, questionGrades: (QuestionGrade | null)[]) => void;
 }) {
   const answers = (submission.answers as QuizAnswer[]) ?? [];
+  const [questionGrades, setQuestionGrades] = useState<(QuestionGrade | null)[]>(() => {
+    const storedGrades = parseQuestionGrades(submission.question_grades);
+    return quiz.questions.map((question, index) =>
+      question.answerType === "written"
+        ? (storedGrades[index] ?? { correct: null, points: null })
+        : null,
+    );
+  });
   const automaticScore = quiz.questions.reduce(
     (sum, question, index) =>
       sum +
@@ -425,22 +451,37 @@ function SubmissionRow({
         : 0),
     0,
   );
-  const writtenMaximum = quiz.questions.reduce(
-    (sum, question) => sum + (question.answerType === "written" ? question.points : 0),
-    0,
-  );
   const hasWrittenQuestions = quiz.questions.some((question) => question.answerType === "written");
   const total = quiz.questions.reduce((sum, question) => sum + question.points, 0);
-  const hasPendingWrittenGrade = hasWrittenQuestions && !submission.graded_at;
-  const [writtenPoints, setWrittenPoints] = useState(
-    String(Math.max(0, submission.score_obtained - automaticScore)),
+  const writtenQuestions = quiz.questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => question.answerType === "written");
+  const gradesComplete = writtenQuestions.every(({ question, index }) => {
+    const grade = questionGrades[index];
+    return (
+      grade?.correct !== null &&
+      grade?.correct !== undefined &&
+      grade.points !== null &&
+      grade.points !== undefined &&
+      Number.isInteger(grade.points) &&
+      grade.points >= 0 &&
+      grade.points <= question.points
+    );
+  });
+  const hasPendingWrittenGrade = hasWrittenQuestions && (!submission.graded_at || !gradesComplete);
+  const writtenPoints = writtenQuestions.reduce(
+    (sum, { index }) => sum + (questionGrades[index]?.points ?? 0),
+    0,
   );
-  const parsedWrittenPoints = Number(writtenPoints);
-  const validScore =
-    writtenPoints.trim() !== "" &&
-    Number.isInteger(parsedWrittenPoints) &&
-    parsedWrittenPoints >= 0 &&
-    parsedWrittenPoints <= writtenMaximum;
+  const score = automaticScore + writtenPoints;
+
+  function setWrittenGrade(index: number, patch: Partial<QuestionGrade>) {
+    setQuestionGrades((current) =>
+      current.map((grade, gradeIndex) =>
+        gradeIndex === index ? { ...(grade ?? { correct: null, points: null }), ...patch } : grade,
+      ),
+    );
+  }
 
   return (
     <li className="rounded-xl border border-border bg-card p-3">
@@ -473,39 +514,75 @@ function SubmissionRow({
                     ? (question.options[answer] ?? "Sem resposta")
                     : "Sem resposta"}
               </p>
+              {question.answerType === "written" ? (
+                <div className="mt-2 flex flex-wrap items-end gap-3 rounded-lg bg-secondary/60 p-2.5">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={questionGrades[index]?.correct === true ? "softSuccess" : "soft"}
+                      size="sm"
+                      aria-pressed={questionGrades[index]?.correct === true}
+                      disabled={saving}
+                      onClick={() =>
+                        setWrittenGrade(index, { correct: true, points: question.points })
+                      }
+                    >
+                      <Check className="size-4" /> Acertou
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={questionGrades[index]?.correct === false ? "softDanger" : "soft"}
+                      size="sm"
+                      aria-pressed={questionGrades[index]?.correct === false}
+                      disabled={saving}
+                      onClick={() => setWrittenGrade(index, { correct: false, points: 0 })}
+                    >
+                      <X className="size-4" /> Errou
+                    </Button>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`grade-${submission.id}-${question.id}`} className="text-xs">
+                      Nota (máximo {question.points})
+                    </Label>
+                    <Input
+                      id={`grade-${submission.id}-${question.id}`}
+                      type="number"
+                      min={0}
+                      max={question.points}
+                      step={1}
+                      className="h-9 w-28"
+                      value={questionGrades[index]?.points ?? ""}
+                      disabled={saving}
+                      onChange={(event) =>
+                        setWrittenGrade(index, {
+                          points: event.target.value === "" ? null : Number(event.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
             </li>
           );
         })}
       </ol>
       {hasWrittenQuestions ? (
         <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-border pt-3">
-          <div className="space-y-1">
-            <Label htmlFor={`grade-${submission.id}`} className="text-xs">
-              Pontos das respostas discursivas (máximo {writtenMaximum})
-            </Label>
-            <Input
-              id={`grade-${submission.id}`}
-              type="number"
-              min={0}
-              max={writtenMaximum}
-              step={1}
-              className="h-9 w-36"
-              value={writtenPoints}
-              onChange={(event) => setWrittenPoints(event.target.value)}
-            />
-          </div>
           <Button
             variant="ink"
             size="sm"
-            disabled={saving || !validScore}
-            onClick={() => onGrade(automaticScore + parsedWrittenPoints)}
+            disabled={saving || !gradesComplete}
+            onClick={() => onGrade(score, questionGrades)}
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-            {submission.graded_at ? "Salvar correção" : "Corrigir resposta"}
+            {submission.graded_at && gradesComplete ? "Salvar correção" : "Concluir correção"}
           </Button>
+          <span className="text-xs font-semibold text-muted-foreground">
+            Nota total: {score}/{total}
+          </span>
           {hasPendingWrittenGrade ? (
             <span className="text-xs text-muted-foreground">
-              Os pontos das alternativas já foram creditados.
+              Marque Acertou ou Errou e informe a nota de cada resposta discursiva.
             </span>
           ) : null}
         </div>

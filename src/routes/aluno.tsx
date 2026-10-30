@@ -30,7 +30,15 @@ import { lessonTag, useLessons } from "@/hooks/useLessons";
 import { LessonDialog } from "@/components/LessonDialog";
 import { VerseDialog } from "@/components/VerseDialog";
 import { currentVerse, useWeeklyVerses, type WeeklyVerse } from "@/hooks/useWeeklyVerses";
-import { QUIZ_COLUMNS, parseQuiz, quizStatus, type Quiz, type QuizAnswer } from "@/lib/types";
+import {
+  QUIZ_COLUMNS,
+  parseQuestionGrades,
+  parseQuiz,
+  quizStatus,
+  type QuestionGrade,
+  type Quiz,
+  type QuizAnswer,
+} from "@/lib/types";
 import { currentTerm, isVisibleTerm, termLabel, todayInSaoPaulo } from "@/lib/terms";
 import {
   Select,
@@ -455,6 +463,7 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
   const [reviewing, setReviewing] = useState<{
     quiz: Quiz;
     answers: QuizAnswer[];
+    questionGrades: (QuestionGrade | null)[];
     score: number;
     gradedAt: string | null;
     justSubmitted: boolean;
@@ -495,13 +504,14 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("submissions")
-        .select("quiz_id, score_obtained, answers, graded_at")
+        .select("quiz_id, score_obtained, answers, question_grades, graded_at")
         .eq("student_id", session!.user.id);
       if (error) throw error;
       return (data ?? []).map((row) => ({
         quiz_id: row.quiz_id,
         score_obtained: row.score_obtained,
         answers: (row.answers as QuizAnswer[]) ?? [],
+        questionGrades: parseQuestionGrades(row.question_grades),
         graded_at: row.graded_at,
       }));
     },
@@ -515,7 +525,14 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
         onCelebrate={onCelebrate}
         onSubmitted={(answers, score, gradedAt) => {
           setActive(null);
-          setReviewing({ quiz: active, answers, score, gradedAt, justSubmitted: true });
+          setReviewing({
+            quiz: active,
+            answers,
+            questionGrades: [],
+            score,
+            gradedAt,
+            justSubmitted: true,
+          });
         }}
       />
     );
@@ -526,6 +543,7 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
       <QuizReview
         quiz={reviewing.quiz}
         answers={reviewing.answers}
+        questionGrades={reviewing.questionGrades}
         score={reviewing.score}
         gradedAt={reviewing.gradedAt}
         justSubmitted={reviewing.justSubmitted}
@@ -617,6 +635,7 @@ function MyTasks({ onCelebrate }: { onCelebrate: () => void }) {
                       setReviewing({
                         quiz,
                         answers: submission.answers,
+                        questionGrades: submission.questionGrades,
                         score: submission.score_obtained,
                         gradedAt: submission.graded_at,
                         justSubmitted: false,
