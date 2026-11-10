@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, Loader2, QrCode, Search, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Loader2, Lock, QrCode, Search, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -100,6 +100,8 @@ export function AttendanceTab({
       student: Student;
       rule: Rule;
     }) => {
+      if (lessonClosed)
+        throw new Error("A aula de hoje foi encerrada. Reabra na aba Aula para corrigir.");
       const { data, error } = await supabase
         .from("points_history")
         .delete()
@@ -118,6 +120,8 @@ export function AttendanceTab({
 
   const apply = useMutation({
     mutationFn: async ({ student, rule }: { student: Student; rule: Rule }) => {
+      if (lessonClosed)
+        throw new Error("A aula de hoje foi encerrada. Reabra na aba Aula para lançar pontos.");
       const { error } = await supabase.from("points_history").insert({
         student_id: student.id,
         type: rule.key,
@@ -207,7 +211,7 @@ export function AttendanceTab({
         <Button
           variant="ink"
           onClick={() => setScanning(true)}
-          disabled={!presenceRule}
+          disabled={lessonClosed || !presenceRule}
           title="Marcar presença lendo o QR code dos alunos"
         >
           <QrCode className="size-4" /> Ler QR
@@ -223,10 +227,11 @@ export function AttendanceTab({
           await apply.mutateAsync({ student, rule });
         }}
       />
-      {todayLesson?.closed_at && (
-        <div className="rounded-xl border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
-          Aula de hoje encerrada — você ainda pode ajustar presença, pontualidade e outros itens da
-          chamada.
+      {lessonClosed && (
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
+          <Lock className="size-4 shrink-0" />
+          Aula de hoje encerrada — os lançamentos estão bloqueados. Reabra na aba “Aula” se precisar
+          corrigir algo.
         </div>
       )}
 
@@ -288,12 +293,6 @@ export function AttendanceTab({
                         .filter((r) => r.group_id === group.id)
                         .map((rule) => {
                           const entryId = appliedToday.get(`${student.id}:${rule.key}`);
-                          const isAttendanceRule = [
-                            "PRESENCA",
-                            "PONTUALIDADE",
-                            "ATRASO",
-                            "FALTA",
-                          ].includes(rule.key);
                           const busy = apply.isPending || undo.isPending;
                           if (entryId) {
                             return (
@@ -301,7 +300,7 @@ export function AttendanceTab({
                                 key={rule.key}
                                 size="sm"
                                 variant={rule.points >= 0 ? "success" : "destructive"}
-                                disabled={busy || (lessonClosed && !isAttendanceRule)}
+                                disabled={busy || lessonClosed}
                                 onClick={() => undo.mutate({ entryId, student, rule })}
                                 aria-pressed
                                 title="Toque para desfazer"
@@ -326,7 +325,7 @@ export function AttendanceTab({
                               key={rule.key}
                               size="sm"
                               variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
-                              disabled={busy || (lessonClosed && !isAttendanceRule)}
+                              disabled={busy || lessonClosed}
                               onClick={() => apply.mutate({ student, rule })}
                               className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left active:scale-[0.98]"
                             >
