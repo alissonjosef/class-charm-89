@@ -13,7 +13,8 @@ import {
   useToggleClassMember,
 } from "@/hooks/useClasses";
 import { usePeople } from "@/hooks/useStudents";
-import { currentTerm, recentTerms, termLabel } from "@/lib/terms";
+import { currentTerm, recentTerms, termLabel, termOfDate, todayInSaoPaulo } from "@/lib/terms";
+import { isLessonOpen, type Lesson } from "@/hooks/useLessons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,9 @@ export function ClassBar({
   onTermChange,
   manageable = false,
   showTerm = true,
+  lessonId,
+  onLessonChange,
+  lessons = [],
 }: {
   classId: string;
   onChange: (value: string) => void;
@@ -60,6 +64,9 @@ export function ClassBar({
   onTermChange: (value: string) => void;
   manageable?: boolean;
   showTerm?: boolean;
+  lessonId?: string | null;
+  onLessonChange?: (value: string) => void;
+  lessons?: Lesson[];
 }) {
   const { isMaster } = useAuth();
   const { data: classes, isLoading } = useClasses();
@@ -128,6 +135,35 @@ export function ClassBar({
                 {value === currentTerm() ? " (atual)" : ""}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+
+      {lessonId !== undefined && onLessonChange ? (
+        <Select value={lessonId ?? ""} onValueChange={onLessonChange}>
+          <SelectTrigger className="w-full sm:w-64" aria-label="Aula do trimestre">
+            <SelectValue placeholder="Selecione uma aula aberta" />
+          </SelectTrigger>
+          <SelectContent>
+            {lessons
+              .filter((lesson) => termOfDate(lesson.lesson_date) === term)
+              .map((lesson) => {
+                const open = isLessonOpen(lesson);
+                const status = open
+                  ? "aberta"
+                  : lesson.closed_at
+                    ? "encerrada"
+                    : lesson.lesson_date > todayInSaoPaulo()
+                      ? "agendada"
+                      : "indisponível";
+                return (
+                  <SelectItem key={lesson.id} value={lesson.id} disabled={!open}>
+                    {lesson.lesson_number ? `Lição ${lesson.lesson_number} · ` : ""}
+                    {new Date(`${lesson.lesson_date}T00:00:00`).toLocaleDateString("pt-BR")} ·{" "}
+                    {lesson.theme} · {status}
+                  </SelectItem>
+                );
+              })}
           </SelectContent>
         </Select>
       ) : null}

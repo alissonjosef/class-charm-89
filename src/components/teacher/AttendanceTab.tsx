@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Loader2, Lock, QrCode, Search, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -7,8 +7,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useClassMembers, useClasses } from "@/hooks/useClasses";
 import { useTermPoints } from "@/hooks/useTermPoints";
 import { useStudents, type Student } from "@/hooks/useStudents";
-import { useTodayLesson } from "@/hooks/useLessons";
-import { monthOf, todayInSaoPaulo } from "@/lib/terms";
+import { isLessonOpen, useLessons } from "@/hooks/useLessons";
+import { monthOf, termOfDate, todayInSaoPaulo } from "@/lib/terms";
 import { ALL_CLASSES, ClassBar } from "./ClassBar";
 import { rankLabel, useMonthRanking } from "./MonthRanking";
 import { levelFor, type Rule } from "@/lib/points";
@@ -40,6 +40,7 @@ export function AttendanceTab({
   const { data: rulesData } = useRules(selectedClass);
   const className = (classes ?? []).find((room) => room.id === classId)?.name ?? null;
   const { data: members } = useClassMembers(selectedClass);
+  const { data: lessons } = useLessons(selectedClass);
   const { data: termPoints } = useTermPoints(term, selectedClass);
   const pointsOf = (studentId: string) => termPoints?.[studentId] ?? 0;
   const students = (
@@ -57,21 +58,32 @@ export function AttendanceTab({
   const [search, setSearch] = useState("");
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
   const today = todayInSaoPaulo();
+  const termLessons = (lessons ?? []).filter((lesson) => termOfDate(lesson.lesson_date) === term);
+  const openLessons = termLessons.filter((lesson) => isLessonOpen(lesson, today));
+  const selectedLesson = termLessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
+  const lessonIsOpen = selectedLesson ? isLessonOpen(selectedLesson, today) : false;
+
+  useEffect(() => {
+    if (lessonIsOpen) return;
+    setSelectedLessonId(openLessons[0]?.id ?? null);
+  }, [classId, term, lessonIsOpen, openLessons]);
+
   const month = monthOf(today);
   const { rankOf } = useMonthRanking(students ?? [], month, selectedClass);
   const presenceRule = (rulesData?.rules ?? []).find((r) => r.key === "PRESENCA");
-  const { data: todayLesson } = useTodayLesson(selectedClass);
-  const lessonClosed = Boolean(todayLesson?.closed_at);
   const studentIds = (students ?? []).map((s) => s.id);
   const { data: todayEntries } = useQuery({
     queryKey: ["today-entries", today, studentIds.slice().sort().join(","), session?.user.id],
     enabled: studentIds.length > 0,
-    queryFn: async (): Promise<{ id: string; student_id: string; type: string }[]> => {
+    queryFn: async (): Promise<
+      { id: string; student_id: string; type: string; lesson_id: string | null }[]
+    > => {
       const { data, error } = await supabase
         .from("points_history")
-        .select("id, student_id, type")
+        .select("id, student_id, type, lesson_id")
         .eq("entry_date", today)
         .in("student_id", studentIds);
       if (error) throw error;
@@ -80,6 +92,9 @@ export function AttendanceTab({
   });
   const appliedToday = new Map(
     (todayEntries ?? []).map((row) => [`${row.student_id}:${row.type}`, row.id]),
+  );
+  const lessonOfEntryToday = new Map(
+    (todayEntries ?? []).map((row) => [`${row.student_id}:${row.type}`, row.lesson_id]),
   );
 
   function invalidatePoints() {
@@ -95,13 +110,15 @@ export function AttendanceTab({
       entryId,
       student,
       rule,
+      lessonId,
     }: {
       entryId: string;
       student: Student;
       rule: Rule;
+      lessonId: string;
     }) => {
-      if (lessonClosed)
-        throw new Error("A aula de hoje foi encerrada. Reabra na aba Aula para corrigir.");
+      if (!lessonIsOpen || lessonId !== selectedLesson?.id)
+        throw new Error("Selecione uma aula aberta para desfazer lançamentos.");
       const { data, error } = await supabase
         .from("points_history")
         .delete()
@@ -120,8 +137,8 @@ export function AttendanceTab({
 
   const apply = useMutation({
     mutationFn: async ({ student, rule }: { student: Student; rule: Rule }) => {
-      if (lessonClosed)
-        throw new Error("A aula de hoje foi encerrada. Reabra na aba Aula para lançar pontos.");
+      if (!lessonIsOpen || !selectedLesson)
+        throw new Error("Selecione uma aula aberta para lançar pontos.");
       const { error } = await supabase.from("points_history").insert({
         student_id: student.id,
         type: rule.key,
@@ -129,7 +146,7 @@ export function AttendanceTab({
         note: rule.label,
         registered_by: session!.user.id,
         class_id: classId === ALL_CLASSES && isMaster ? null : classId || null,
-        lesson_id: todayLesson?.id ?? null,
+        lesson_id: selectedLesson.id,
       });
       if (error) throw error;
       return { student, rule };
@@ -155,6 +172,17 @@ export function AttendanceTab({
   const filtered = (students ?? []).filter((s) =>
     s.name.toLowerCase().includes(search.trim().toLowerCase()),
   );
+  const classBar = (
+    <ClassBar
+      classId={classId}
+      onChange={onClassChange}
+      term={term}
+      onTermChange={onTermChange}
+      lessonId={selectedLessonId}
+      onLessonChange={setSelectedLessonId}
+      lessons={termLessons}
+    />
+  );
 
   if (isLoading) {
     return (
@@ -167,12 +195,7 @@ export function AttendanceTab({
   if (!students?.length) {
     return (
       <>
-        <ClassBar
-          classId={classId}
-          onChange={onClassChange}
-          term={term}
-          onTermChange={onTermChange}
-        />
+        {classBar}
         <EmptyState
           title={
             classId === ALL_CLASSES && isMaster
@@ -191,12 +214,7 @@ export function AttendanceTab({
 
   return (
     <div className="space-y-3">
-      <ClassBar
-        classId={classId}
-        onChange={onClassChange}
-        term={term}
-        onTermChange={onTermChange}
-      />
+      {classBar}
 
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -211,7 +229,7 @@ export function AttendanceTab({
         <Button
           variant="ink"
           onClick={() => setScanning(true)}
-          disabled={lessonClosed || !presenceRule}
+          disabled={!lessonIsOpen || !presenceRule}
           title="Marcar presença lendo o QR code dos alunos"
         >
           <QrCode className="size-4" /> Ler QR
@@ -227,11 +245,11 @@ export function AttendanceTab({
           await apply.mutateAsync({ student, rule });
         }}
       />
-      {lessonClosed && (
+      {!lessonIsOpen && (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground">
           <Lock className="size-4 shrink-0" />
-          Aula de hoje encerrada — os lançamentos estão bloqueados. Reabra na aba “Aula” se precisar
-          corrigir algo.
+          Não há aula aberta neste trimestre. Selecione uma aula aberta para fazer a chamada e
+          lançar pontos.
         </div>
       )}
 
@@ -292,30 +310,51 @@ export function AttendanceTab({
                       {(rulesData?.rules ?? [])
                         .filter((r) => r.group_id === group.id)
                         .map((rule) => {
-                          const entryId = appliedToday.get(`${student.id}:${rule.key}`);
+                          const entryKey = `${student.id}:${rule.key}`;
+                          const entryId = appliedToday.get(entryKey);
+                          const entryLessonId = lessonOfEntryToday.get(entryKey);
                           const busy = apply.isPending || undo.isPending;
                           if (entryId) {
+                            const belongsToSelectedLesson = entryLessonId === selectedLesson?.id;
                             return (
                               <Button
                                 key={rule.key}
                                 size="sm"
                                 variant={rule.points >= 0 ? "success" : "destructive"}
-                                disabled={busy || lessonClosed}
-                                onClick={() => undo.mutate({ entryId, student, rule })}
+                                disabled={busy || !lessonIsOpen || !belongsToSelectedLesson}
+                                onClick={() => {
+                                  if (!selectedLesson) return;
+                                  undo.mutate({
+                                    entryId,
+                                    student,
+                                    rule,
+                                    lessonId: selectedLesson.id,
+                                  });
+                                }}
                                 aria-pressed
-                                title="Toque para desfazer"
+                                title={
+                                  belongsToSelectedLesson
+                                    ? "Toque para desfazer"
+                                    : "Esta nota já foi lançada hoje em outra aula"
+                                }
                                 className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left"
                               >
                                 <span className="flex items-center gap-1 text-xs font-medium leading-tight">
                                   <Check className="size-3.5" />
-                                  {rule.label}
+                                  {belongsToSelectedLesson ? rule.label : `${rule.label} · outra aula`}
                                 </span>
                                 <span className="flex items-center gap-1 font-display text-xs font-bold">
                                   {rule.points > 0 ? "+" : ""}
                                   {rule.points}
-                                  <span className="flex items-center gap-0.5 font-sans text-[10px] font-normal opacity-80">
-                                    <Undo2 className="size-3" /> desfazer
-                                  </span>
+                                  {belongsToSelectedLesson ? (
+                                    <span className="flex items-center gap-0.5 font-sans text-[10px] font-normal opacity-80">
+                                      <Undo2 className="size-3" /> desfazer
+                                    </span>
+                                  ) : (
+                                    <span className="font-sans text-[10px] font-normal opacity-80">
+                                      já lançado hoje
+                                    </span>
+                                  )}
                                 </span>
                               </Button>
                             );
@@ -325,7 +364,7 @@ export function AttendanceTab({
                               key={rule.key}
                               size="sm"
                               variant={rule.points >= 0 ? "softSuccess" : "softDanger"}
-                              disabled={busy || lessonClosed}
+                              disabled={busy || !lessonIsOpen}
                               onClick={() => apply.mutate({ student, rule })}
                               className="h-auto flex-col items-start gap-0.5 whitespace-normal px-3 py-2 text-left active:scale-[0.98]"
                             >

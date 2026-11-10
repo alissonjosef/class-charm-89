@@ -15,6 +15,10 @@ export type Lesson = {
   class_id: string | null;
 };
 
+export function isLessonOpen(lesson: Lesson, today = todayInSaoPaulo()): boolean {
+  return !lesson.closed_at && lesson.lesson_date <= today;
+}
+
 const LESSON_COLUMNS =
   "id, lesson_date, lesson_number, theme, description, created_by, created_at, closed_at, class_id";
 
