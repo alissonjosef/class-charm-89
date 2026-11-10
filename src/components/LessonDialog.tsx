@@ -181,8 +181,8 @@ export function LessonDialog({ lesson, onClose, canEdit = false }: Props) {
                           disabled={closeLesson.isPending}
                           title={
                             isClosed
-                              ? "Reabrir para lançar pontos e editar"
-                              : "Com a aula encerrada, a chamada não lança mais pontos"
+                              ? "Reabrir para editar os dados da aula"
+                              : "Encerrar a edição dos dados da aula"
                           }
                         >
                           {isClosed ? <LockOpen className="size-4" /> : <Lock className="size-4" />}
