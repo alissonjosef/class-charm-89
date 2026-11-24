@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CalendarClock, Pencil, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +25,7 @@ export function WeeklyVerseCard({ classId }: { classId: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...EMPTY, releaseDate: today });
   const [openId, setOpenId] = useState<string | null>(null);
+  const [deletingVerse, setDeletingVerse] = useState<WeeklyVerse | null>(null);
 
   const active = currentVerse(verses);
   const openVerse = verses?.find((v) => v.id === openId) ?? null;
@@ -75,11 +77,13 @@ export function WeeklyVerseCard({ classId }: { classId: string }) {
     );
   }
 
-  function del(verse: WeeklyVerse) {
-    remove.mutate(verse.id, {
+  function del() {
+    if (!deletingVerse) return;
+    remove.mutate(deletingVerse.id, {
       onSuccess: () => {
         toast.success("Versículo excluído");
-        if (editingId === verse.id) cancelEdit();
+        if (editingId === deletingVerse.id) cancelEdit();
+        setDeletingVerse(null);
       },
       onError: (error) =>
         toast.error(error instanceof Error ? error.message : "Erro ao excluir o versículo"),
@@ -185,7 +189,7 @@ export function WeeklyVerseCard({ classId }: { classId: string }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => del(verse)}
+                  onClick={() => setDeletingVerse(verse)}
                   disabled={remove.isPending}
                   title="Excluir"
                 >
@@ -197,6 +201,16 @@ export function WeeklyVerseCard({ classId }: { classId: string }) {
         </ul>
       )}
 
+      <ConfirmActionDialog
+        open={Boolean(deletingVerse)}
+        onOpenChange={(open) => {
+          if (!open) setDeletingVerse(null);
+        }}
+        title={`Excluir o versículo “${deletingVerse?.reference ?? ""}”?`}
+        description="Essa ação não pode ser desfeita."
+        pending={remove.isPending}
+        onConfirm={del}
+      />
       <VerseDialog verse={openVerse} onClose={() => setOpenId(null)} />
     </section>
   );

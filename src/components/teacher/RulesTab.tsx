@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useRuleMutations, useRules } from "@/hooks/useRules";
 import type { Rule, RuleGroup } from "@/lib/points";
@@ -286,6 +287,7 @@ function RuleRow({ rule }: { rule: Rule }) {
   const { updateRule, deleteRule } = useRuleMutations();
   const [label, setLabel] = useState(rule.label);
   const [points, setPoints] = useState(String(rule.points));
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const dirty = label.trim() !== rule.label || Number(points) !== rule.points;
 
   async function save() {
@@ -308,51 +310,64 @@ function RuleRow({ rule }: { rule: Rule }) {
   }
 
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_5rem_auto_auto] items-center gap-2 px-3 py-2">
-      <Input
-        value={label}
-        onChange={(event) => setLabel(event.target.value)}
-        maxLength={60}
-        aria-label="Nome da regra"
-        className="h-9"
-      />
-      <Input
-        type="number"
-        step={1}
-        value={points}
-        onChange={(event) => setPoints(event.target.value)}
-        aria-label="Pontos"
-        className={`h-9 text-right font-display font-bold ${
-          Number(points) >= 0 ? "text-success" : "text-destructive"
-        }`}
-      />
-      <Button
-        variant={dirty ? "softSuccess" : "ghost"}
-        size="icon"
-        aria-label="Salvar regra"
-        disabled={!dirty || updateRule.isPending}
-        onClick={save}
-      >
-        {updateRule.isPending ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Check className="size-4" />
-        )}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Excluir regra"
-        disabled={deleteRule.isPending}
-        onClick={() =>
+    <>
+      <li className="grid grid-cols-[minmax(0,1fr)_5rem_auto_auto] items-center gap-2 px-3 py-2">
+        <Input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          maxLength={60}
+          aria-label="Nome da regra"
+          className="h-9"
+        />
+        <Input
+          type="number"
+          step={1}
+          value={points}
+          onChange={(event) => setPoints(event.target.value)}
+          aria-label="Pontos"
+          className={`h-9 text-right font-display font-bold ${
+            Number(points) >= 0 ? "text-success" : "text-destructive"
+          }`}
+        />
+        <Button
+          variant={dirty ? "softSuccess" : "ghost"}
+          size="icon"
+          aria-label="Salvar regra"
+          disabled={!dirty || updateRule.isPending}
+          onClick={save}
+        >
+          {updateRule.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Check className="size-4" />
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Excluir regra"
+          disabled={deleteRule.isPending}
+          onClick={() => setConfirmDelete(true)}
+        >
+          <Trash2 className="size-4 text-destructive" />
+        </Button>
+      </li>
+      <ConfirmActionDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Excluir a regra “${rule.label}”?`}
+        description="Ela deixará de aparecer nas próximas chamadas. O extrato de pontos já lançado não muda."
+        pending={deleteRule.isPending}
+        onConfirm={() =>
           deleteRule.mutate(rule.id, {
-            onSuccess: () => toast.success(`Regra “${rule.label}” excluída`),
+            onSuccess: () => {
+              toast.success(`Regra “${rule.label}” excluída`);
+              setConfirmDelete(false);
+            },
             onError: (error) => toast.error(errorMessage(error)),
           })
         }
-      >
-        <Trash2 className="size-4 text-destructive" />
-      </Button>
-    </li>
+      />
+    </>
   );
 }

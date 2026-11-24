@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { ruleLabel } from "@/lib/points";
@@ -67,6 +68,7 @@ export function HistoryTab({
   const [month, setMonth] = useState(ALL);
   const [lessonId, setLessonId] = useState(ALL);
   const [allTerms, setAllTerms] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const termFilter = allTerms ? ALL : term;
   const selectedClass = classId === ALL_CLASSES || !classId ? null : classId;
   const { data: members } = useClassMembers(selectedClass);
@@ -80,15 +82,7 @@ export function HistoryTab({
   const { ranking } = useMonthRanking(rankingStudents, rankingMonth, selectedClass);
 
   const { data, isLoading } = useQuery({
-    queryKey: [
-      "class-history",
-      classId,
-      termFilter,
-      studentId,
-      month,
-      lessonId,
-      session?.user.id,
-    ],
+    queryKey: ["class-history", classId, termFilter, studentId, month, lessonId, session?.user.id],
     enabled: isMaster || Boolean(classId),
     queryFn: async (): Promise<Row[]> => {
       let query = supabase
@@ -312,12 +306,27 @@ export function HistoryTab({
                   size="icon"
                   className="text-muted-foreground hover:text-destructive"
                   disabled={remove.isPending}
-                  onClick={() => remove.mutate(row.id)}
+                  onClick={() => setConfirmDeleteId(row.id)}
                   aria-label="Estornar lançamento"
                 >
                   <Trash2 className="size-4" />
                 </Button>
               </div>
+              <ConfirmActionDialog
+                open={confirmDeleteId === row.id}
+                onOpenChange={(open) => {
+                  if (!open) setConfirmDeleteId(null);
+                }}
+                title="Estornar este lançamento?"
+                description="Os pontos serão removidos do extrato e do total do aluno. Essa ação não pode ser desfeita."
+                confirmLabel="Estornar"
+                pending={remove.isPending}
+                onConfirm={() => {
+                  remove.mutate(row.id, {
+                    onSuccess: () => setConfirmDeleteId(null),
+                  });
+                }}
+              />
             </li>
           );
         })}

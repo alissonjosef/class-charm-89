@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -90,6 +91,7 @@ export function QuizzesTab({
   const canCreateQuiz = Boolean(selectedClass) || isMaster;
   const { data: quizzes, isLoading } = useQuizzes(term, selectedClass);
   const [openQuiz, setOpenQuiz] = useState<string | null>(null);
+  const [confirmDeleteQuizId, setConfirmDeleteQuizId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const setRelease = useMutation({
@@ -122,6 +124,8 @@ export function QuizzesTab({
       toast.success("Avaliação removida");
       queryClient.invalidateQueries({ queryKey: ["quizzes"] });
     },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Não foi possível remover a avaliação"),
   });
 
   if (creating) return <QuizForm classId={selectedClass} onDone={() => setCreating(false)} />;
@@ -237,7 +241,7 @@ export function QuizzesTab({
                     variant="ghost"
                     size="icon"
                     className="text-muted-foreground hover:text-destructive"
-                    onClick={() => remove.mutate(quiz.id)}
+                    onClick={() => setConfirmDeleteQuizId(quiz.id)}
                     aria-label="Remover quiz"
                   >
                     <Trash2 className="size-4" />
@@ -245,6 +249,20 @@ export function QuizzesTab({
                 </div>
               </div>
               {openQuiz === quiz.id ? <SubmissionsPanel quiz={quiz} /> : null}
+              <ConfirmActionDialog
+                open={confirmDeleteQuizId === quiz.id}
+                onOpenChange={(open) => {
+                  if (!open) setConfirmDeleteQuizId(null);
+                }}
+                title={`Excluir a avaliação “${quiz.title}”?`}
+                description="As respostas e correções dos alunos também serão removidas. Essa ação não pode ser desfeita."
+                pending={remove.isPending}
+                onConfirm={() =>
+                  remove.mutate(quiz.id, {
+                    onSuccess: () => setConfirmDeleteQuizId(null),
+                  })
+                }
+              />
             </article>
           ))}
         </div>
@@ -291,6 +309,10 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : "Não foi possível atualizar"),
   });
+  const [confirmRevokeStudent, setConfirmRevokeStudent] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["submissions", quiz.id, session?.user.id],
     refetchInterval: 15000,
@@ -324,10 +346,12 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
         .eq("id", submissionId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Correção salva e pontos atualizados");
-      queryClient.invalidateQueries({ queryKey: ["submissions", quiz.id] });
-      queryClient.invalidateQueries({ queryKey: ["my-submissions"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["submissions", quiz.id] }),
+        queryClient.invalidateQueries({ queryKey: ["my-submissions"] }),
+      ]);
     },
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar a correção"),
@@ -373,7 +397,11 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
                     variant={reopened ? "softDanger" : "softSuccess"}
                     size="sm"
                     disabled={toggleReopen.isPending}
-                    onClick={() => toggleReopen.mutate({ studentId: student.id, grant: !reopened })}
+                    onClick={() =>
+                      reopened
+                        ? setConfirmRevokeStudent({ id: student.id, name: student.name })
+                        : toggleReopen.mutate({ studentId: student.id, grant: true })
+                    }
                   >
                     {reopened ? (
                       <>
@@ -411,6 +439,23 @@ function SubmissionsPanel({ quiz }: { quiz: Quiz }) {
           ))}
         </ul>
       )}
+      <ConfirmActionDialog
+        open={Boolean(confirmRevokeStudent)}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRevokeStudent(null);
+        }}
+        title={`Cancelar a liberação de ${confirmRevokeStudent?.name ?? "aluno"}?`}
+        description="O aluno não poderá mais acessar esta avaliação."
+        confirmLabel="Cancelar liberação"
+        pending={toggleReopen.isPending}
+        onConfirm={() => {
+          if (!confirmRevokeStudent) return;
+          toggleReopen.mutate(
+            { studentId: confirmRevokeStudent.id, grant: false },
+            { onSuccess: () => setConfirmRevokeStudent(null) },
+          );
+        }}
+      />
     </div>
   );
 }
@@ -435,8 +480,8 @@ function SubmissionRow({
   onGrade: (score: number, questionGrades: (QuestionGrade | null)[]) => void;
 }) {
   const answers = (submission.answers as QuizAnswer[]) ?? [];
+  const storedGrades = parseQuestionGrades(submission.question_grades);
   const [questionGrades, setQuestionGrades] = useState<(QuestionGrade | null)[]>(() => {
-    const storedGrades = parseQuestionGrades(submission.question_grades);
     return quiz.questions.map((question, index) =>
       question.answerType === "written"
         ? (storedGrades[index] ?? { correct: null, points: null })
@@ -456,6 +501,11 @@ function SubmissionRow({
   const writtenQuestions = quiz.questions
     .map((question, index) => ({ question, index }))
     .filter(({ question }) => question.answerType === "written");
+  const gradesChanged = writtenQuestions.some(({ index }) => {
+    const savedGrade = storedGrades[index] ?? { correct: null, points: null };
+    const currentGrade = questionGrades[index] ?? { correct: null, points: null };
+    return currentGrade.correct !== savedGrade.correct || currentGrade.points !== savedGrade.points;
+  });
   const gradesComplete = writtenQuestions.every(({ question, index }) => {
     const grade = questionGrades[index];
     return (
@@ -571,7 +621,9 @@ function SubmissionRow({
           <Button
             variant="ink"
             size="sm"
-            disabled={saving || !gradesComplete}
+            disabled={
+              saving || !gradesComplete || (Boolean(submission.graded_at) && !gradesChanged)
+            }
             onClick={() => onGrade(score, questionGrades)}
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -630,10 +682,35 @@ function QuizForm({
       ? quiz.questions.map((q) => ({ ...q, options: [...q.options] }))
       : [emptyQuestion()],
   );
+  const [pendingRemoval, setPendingRemoval] = useState<
+    | { type: "question"; questionId: string }
+    | { type: "option"; questionId: string; optionIndex: number }
+    | null
+  >(null);
   const status = quiz ? quizStatus(quiz) : "rascunho";
 
   function update(id: string, patch: Partial<QuizQuestion>) {
     setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  }
+
+  function confirmRemoval() {
+    if (!pendingRemoval) return;
+    if (pendingRemoval.type === "question") {
+      setQuestions((prev) => prev.filter((q) => q.id !== pendingRemoval.questionId));
+    } else {
+      const { questionId, optionIndex } = pendingRemoval;
+      const question = questions.find((item) => item.id === questionId);
+      if (!question) return;
+      const options = question.options.filter((_, index) => index !== optionIndex);
+      const correctOption =
+        question.correctOption === optionIndex
+          ? 0
+          : question.correctOption > optionIndex
+            ? question.correctOption - 1
+            : question.correctOption;
+      update(questionId, { options, correctOption });
+    }
+    setPendingRemoval(null);
   }
 
   const save = useMutation({
@@ -778,7 +855,7 @@ function QuizForm({
                 variant="ghost"
                 size="icon"
                 className="text-muted-foreground hover:text-destructive"
-                onClick={() => setQuestions((prev) => prev.filter((q) => q.id !== question.id))}
+                onClick={() => setPendingRemoval({ type: "question", questionId: question.id })}
                 aria-label="Remover pergunta"
               >
                 <Trash2 className="size-4" />
@@ -847,16 +924,13 @@ function QuizForm({
                       size="icon"
                       className="shrink-0 text-muted-foreground hover:text-destructive"
                       aria-label="Remover alternativa"
-                      onClick={() => {
-                        const options = question.options.filter((_, i) => i !== optionIndex);
-                        const correctOption =
-                          question.correctOption === optionIndex
-                            ? 0
-                            : question.correctOption > optionIndex
-                              ? question.correctOption - 1
-                              : question.correctOption;
-                        update(question.id, { options, correctOption });
-                      }}
+                      onClick={() =>
+                        setPendingRemoval({
+                          type: "option",
+                          questionId: question.id,
+                          optionIndex,
+                        })
+                      }
                     >
                       <X className="size-4" />
                     </Button>
@@ -919,6 +993,20 @@ function QuizForm({
           Cancelar
         </Button>
       </div>
+      <ConfirmActionDialog
+        open={Boolean(pendingRemoval)}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoval(null);
+        }}
+        title={
+          pendingRemoval?.type === "question"
+            ? "Remover esta pergunta?"
+            : "Remover esta alternativa?"
+        }
+        description="A remoção será aplicada ao quiz quando você salvar as alterações."
+        confirmLabel="Remover"
+        onConfirm={confirmRemoval}
+      />
     </div>
   );
 }

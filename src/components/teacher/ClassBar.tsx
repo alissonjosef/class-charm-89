@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Pencil, Plus, Search, ShieldCheck, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useAuthorizeTeacher,
@@ -375,50 +376,74 @@ function MembersDialog({
   const { data: members } = useClassMembers(classId);
   const toggle = useToggleClassMember(classId);
   const [search, setSearch] = useState("");
+  const [removeStudent, setRemoveStudent] = useState<{ id: string; name: string } | null>(null);
   const students = (people ?? []).filter((p) => !p.isTeacher);
   const visible = students.filter((s) => matches(s, search));
 
   return (
-    <PeopleDialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) setSearch("");
-        onOpenChange(value);
-      }}
-      title="Alunos da sala"
-      description="Marque quem faz parte desta sala. Só os marcados aparecem na chamada e no extrato dela."
-      search={search}
-      onSearch={setSearch}
-    >
-      {visible.map((student) => {
-        const isMember = (members ?? []).includes(student.id);
-        return (
-          <PersonRow
-            key={student.id}
-            name={student.name}
-            email={student.email}
-            checked={isMember}
-            disabled={toggle.isPending}
-            onToggle={() =>
-              toggle.mutate(
-                { studentId: student.id, member: isMember },
-                {
-                  onError: (error) =>
-                    toast.error(
-                      error instanceof Error ? error.message : "Não foi possível atualizar",
-                    ),
-                },
-              )
-            }
-          />
-        );
-      })}
-      {!visible.length ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          {students.length ? "Nenhum aluno encontrado." : "Nenhum aluno cadastrado ainda."}
-        </p>
-      ) : null}
-    </PeopleDialog>
+    <>
+      <PeopleDialog
+        open={open}
+        onOpenChange={(value) => {
+          if (!value) setSearch("");
+          onOpenChange(value);
+        }}
+        title="Alunos da sala"
+        description="Marque quem faz parte desta sala. Só os marcados aparecem na chamada e no extrato dela."
+        search={search}
+        onSearch={setSearch}
+      >
+        {visible.map((student) => {
+          const isMember = (members ?? []).includes(student.id);
+          return (
+            <PersonRow
+              key={student.id}
+              name={student.name}
+              email={student.email}
+              checked={isMember}
+              disabled={toggle.isPending}
+              onToggle={() => {
+                if (isMember) {
+                  setRemoveStudent({ id: student.id, name: student.name });
+                  return;
+                }
+                toggle.mutate(
+                  { studentId: student.id, member: false },
+                  {
+                    onError: (error) =>
+                      toast.error(
+                        error instanceof Error ? error.message : "Não foi possível atualizar",
+                      ),
+                  },
+                );
+              }}
+            />
+          );
+        })}
+        {!visible.length ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {students.length ? "Nenhum aluno encontrado." : "Nenhum aluno cadastrado ainda."}
+          </p>
+        ) : null}
+      </PeopleDialog>
+      <ConfirmActionDialog
+        open={Boolean(removeStudent)}
+        onOpenChange={(value) => {
+          if (!value) setRemoveStudent(null);
+        }}
+        title={`Remover ${removeStudent?.name ?? "aluno"} desta sala?`}
+        description="O aluno deixará de aparecer na chamada e no extrato desta sala."
+        confirmLabel="Remover aluno"
+        pending={toggle.isPending}
+        onConfirm={() => {
+          if (!removeStudent) return;
+          toggle.mutate(
+            { studentId: removeStudent.id, member: true },
+            { onSuccess: () => setRemoveStudent(null) },
+          );
+        }}
+      />
+    </>
   );
 }
 
@@ -436,59 +461,98 @@ function TeachersDialog({
   const { data: teachers } = useClassTeachers(classId);
   const authorize = useAuthorizeTeacher(classId);
   const [search, setSearch] = useState("");
+  const [removeTeacher, setRemoveTeacher] = useState<{ id: string; name: string } | null>(null);
   const candidates = (people ?? []).filter((p) => !p.isMaster);
   const visible = candidates.filter((s) => matches(s, search));
   const ownerId = classes?.find((room) => room.id === classId)?.teacher_id;
 
   return (
-    <PeopleDialog
-      open={open}
-      onOpenChange={(value) => {
-        if (!value) setSearch("");
-        onOpenChange(value);
-      }}
-      title="Delegar professor"
-      description="Todos os professores autorizados podem administrar esta sala. O responsável principal não pode ser removido; os outros professores podem ser adicionados ou retirados daqui."
-      search={search}
-      onSearch={setSearch}
-    >
-      {visible.map((person) => {
-        const authorized = (teachers ?? []).includes(person.id);
-        return (
-          <PersonRow
-            key={person.id}
-            name={person.name}
-            email={person.email}
-            checked={authorized}
-            badge={person.id === ownerId ? "Responsável" : person.isTeacher ? "Professor" : undefined}
-            disabled={authorize.isPending || person.id === ownerId}
-            onToggle={() =>
-              authorize.mutate(
-                { userId: person.id, authorized },
-                {
-                  onSuccess: ({ demoted }) =>
-                    toast.success(
-                      !authorized
-                        ? "Professor autorizado"
-                        : demoted
-                          ? `${person.name} voltou a ser aluno`
-                          : `${person.name} saiu desta sala, mas continua professor em outra`,
-                    ),
-                  onError: (error) =>
-                    toast.error(
-                      error instanceof Error ? error.message : "Não foi possível atualizar",
-                    ),
-                },
-              )
-            }
-          />
-        );
-      })}
-      {!visible.length ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          {candidates.length ? "Ninguém encontrado." : "Nenhuma pessoa cadastrada ainda."}
-        </p>
-      ) : null}
-    </PeopleDialog>
+    <>
+      <PeopleDialog
+        open={open}
+        onOpenChange={(value) => {
+          if (!value) setSearch("");
+          onOpenChange(value);
+        }}
+        title="Delegar professor"
+        description="Todos os professores autorizados podem administrar esta sala. O responsável principal não pode ser removido; os outros professores podem ser adicionados ou retirados daqui."
+        search={search}
+        onSearch={setSearch}
+      >
+        {visible.map((person) => {
+          const authorized = (teachers ?? []).includes(person.id);
+          const updateAuthorization = () =>
+            authorize.mutate(
+              { userId: person.id, authorized },
+              {
+                onSuccess: ({ demoted }) =>
+                  toast.success(
+                    !authorized
+                      ? "Professor autorizado"
+                      : demoted
+                        ? `${person.name} voltou a ser aluno`
+                        : `${person.name} saiu desta sala, mas continua professor em outra`,
+                  ),
+                onError: (error) =>
+                  toast.error(
+                    error instanceof Error ? error.message : "Não foi possível atualizar",
+                  ),
+              },
+            );
+          return (
+            <PersonRow
+              key={person.id}
+              name={person.name}
+              email={person.email}
+              checked={authorized}
+              badge={
+                person.id === ownerId ? "Responsável" : person.isTeacher ? "Professor" : undefined
+              }
+              disabled={authorize.isPending || person.id === ownerId}
+              onToggle={() => {
+                if (authorized) {
+                  setRemoveTeacher({ id: person.id, name: person.name });
+                  return;
+                }
+                updateAuthorization();
+              }}
+            />
+          );
+        })}
+        {!visible.length ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {candidates.length ? "Ninguém encontrado." : "Nenhuma pessoa cadastrada ainda."}
+          </p>
+        ) : null}
+      </PeopleDialog>
+      <ConfirmActionDialog
+        open={Boolean(removeTeacher)}
+        onOpenChange={(value) => {
+          if (!value) setRemoveTeacher(null);
+        }}
+        title={`Remover ${removeTeacher?.name ?? "professor"} desta sala?`}
+        description="A autorização de professor será removida. A função desta pessoa em outras salas não muda."
+        confirmLabel="Remover professor"
+        pending={authorize.isPending}
+        onConfirm={() => {
+          if (!removeTeacher) return;
+          authorize.mutate(
+            { userId: removeTeacher.id, authorized: true },
+            {
+              onSuccess: ({ demoted }) => {
+                toast.success(
+                  demoted
+                    ? `${removeTeacher.name} voltou a ser aluno`
+                    : `${removeTeacher.name} saiu desta sala, mas continua professor em outra`,
+                );
+                setRemoveTeacher(null);
+              },
+              onError: (error) =>
+                toast.error(error instanceof Error ? error.message : "Não foi possível atualizar"),
+            },
+          );
+        }}
+      />
+    </>
   );
 }

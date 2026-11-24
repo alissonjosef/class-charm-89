@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Loader2, Lock, QrCode, Search, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useClassMembers, useClasses } from "@/hooks/useClasses";
@@ -59,6 +60,12 @@ export function AttendanceTab({
   const [burst, setBurst] = useState<{ studentId: string; value: number; id: number } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<{
+    entryId: string;
+    student: Student;
+    rule: Rule;
+    lessonId: string;
+  } | null>(null);
 
   const today = todayInSaoPaulo();
   const termLessons = (lessons ?? []).filter((lesson) => termOfDate(lesson.lesson_date) === term);
@@ -324,7 +331,7 @@ export function AttendanceTab({
                                 disabled={busy || !lessonIsOpen || !belongsToSelectedLesson}
                                 onClick={() => {
                                   if (!selectedLesson) return;
-                                  undo.mutate({
+                                  setPendingUndo({
                                     entryId,
                                     student,
                                     rule,
@@ -341,7 +348,9 @@ export function AttendanceTab({
                               >
                                 <span className="flex items-center gap-1 text-xs font-medium leading-tight">
                                   <Check className="size-3.5" />
-                                  {belongsToSelectedLesson ? rule.label : `${rule.label} · outra aula`}
+                                  {belongsToSelectedLesson
+                                    ? rule.label
+                                    : `${rule.label} · outra aula`}
                                 </span>
                                 <span className="flex items-center gap-1 font-display text-xs font-bold">
                                   {rule.points > 0 ? "+" : ""}
@@ -386,6 +395,20 @@ export function AttendanceTab({
           </article>
         );
       })}
+      <ConfirmActionDialog
+        open={Boolean(pendingUndo)}
+        onOpenChange={(open) => {
+          if (!open) setPendingUndo(null);
+        }}
+        title={`Desfazer “${pendingUndo?.rule.label ?? "lançamento"}” para ${pendingUndo?.student.name ?? "aluno"}?`}
+        description="Os pontos serão removidos do extrato deste aluno. Essa ação não pode ser desfeita."
+        confirmLabel="Desfazer"
+        pending={undo.isPending}
+        onConfirm={() => {
+          if (!pendingUndo) return;
+          undo.mutate(pendingUndo, { onSuccess: () => setPendingUndo(null) });
+        }}
+      />
     </div>
   );
 }
